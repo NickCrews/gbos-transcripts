@@ -1,0 +1,60 @@
+{
+  "sentences": [
+    {
+      "text": "The meeting will come to order.",
+      "start": 1.0,
+      "end": 3.2,
+      "words": [
+        {"text": "The", "start": 1.0, "end": 1.2},
+        {"text": "meeting", "start": 1.2, "end": 1.6},
+        {"text": "will", "start": 1.6, "end": 1.8},
+        {"text": "come", "start": 1.8, "end": 2.1},
+        {"text": "to", "start": 2.1, "end": 2.3},
+        {"text": "order.", "start": 2.3, "end": 3.2}
+      ]
+    },
+    {
+      "text": "Please call roll.",
+      "start": 3.5,
+      "end": 5.0,
+      "words": [
+        {"text": "Please", "start": 3.5, "end": 3.9},
+        {"text": "call", "start": 3.9, "end": 4.2},
+        {"text": "roll.", "start": 4.2, "end": 5.0}
+      ]
+    },
+    {
+      "text": "Member Edgington is present.",
+      "start": 6.0,
+      "end": 8.5,
+      "words": [
+        {"text": "Member", "start": 6.0, "end": 6.4},
+        {"text": "Edgington", "start": 6.4, "end": 7.0},
+        {"text": "is", "start": 7.0, "end": 7.2},
+        {"text": "present.", "start": 7.2, "end": 8.5}
+      ]
+    },
+    {
+      "text": "I move to approve the agenda.",
+      "start": 10.0,
+      "end": 12.8,
+      "words": [
+        {"text": "I", "start": 10.0, "end": 10.2},
+        {"text": "move", "start": 10.2, "end": 10.6},
+        {"text": "to", "start": 10.6, "end": 10.8},
+        {"text": "approve", "start": 10.8, "end": 11.3},
+        {"text": "the", "start": 11.3, "end": 11.5},
+        {"text": "agenda.", "start": 11.5, "end": 12.8}
+      ]
+    },
+    {
+      "text": "Second.",
+      "start": 13.0,
+      "end": 13.8,
+      "words": [
+        {"text": "Second.", "start": 13.0, "end": 13.8}
+      ]
+    }
+  ],
+  "duration": 15.0
+}
