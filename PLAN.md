@@ -2,7 +2,7 @@
 
 ## Context
 
-The Girdwood Board of Supervisors (GBOS) publishes meeting recordings on YouTube (~188 videos). There's no searchable archive of what was said, by whom, or when. This project creates an audio+transcript database with lexical and semantic search, a public JSON API, and a daily update pipeline — enabling citizens and AI agents to find when GBOS discussed any topic.
+The Girdwood Board of Supervisors (GBOS) publishes meeting recordings on [YouTube](https://www.youtube.com/channel/UCOUlNInprZEjhbpVPiJOlEA) (~188 videos). There's no searchable archive of what was said, by whom, or when. This project creates an audio+transcript database with lexical and semantic search, a public JSON API, and a daily update pipeline — enabling citizens and AI agents to find when GBOS discussed any topic.
 
 The data model is designed to be **municipality-agnostic** so additional government bodies can be added later, following the MeetingBank schema conventions where applicable.
 
