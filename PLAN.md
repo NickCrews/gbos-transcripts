@@ -161,7 +161,7 @@ pgvector              # Vector search client for Postgres
 
 # web/package.json
 drizzle-orm           # Type-safe ORM + query builder
-postgres              # Postgres driver (used by drizzle)
+postgres              # postgres-js driver (used by drizzle)
 drizzle-kit           # Schema tooling / migrations
 vite-plugin-solid     # Vite integration for SolidJS
 @tanstack/solid-start # TanStack Start framework for SolidJS
@@ -174,9 +174,27 @@ vitest                # Test runner
 
 ## Testing Architecture
 
+### Local Development Database
+
+Postgres runs in Docker using the `pgvector/pgvector:pg17` image (which ships with pgvector pre-installed). A single command brings it up and applies all Drizzle migrations:
+
+```bash
+pnpm --filter gbos-web db:setup
+# or from within web/
+pnpm db:setup
+```
+
+This runs `docker compose up -d --wait` (waits for the health check to pass) then `drizzle-kit migrate`. The connection string for local dev is:
+
+```
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/gbos
+```
+
+**Production**: swap `DATABASE_URL` for a cloud-hosted Postgres URL, e.g. [Neon](https://neon.tech). No other code changes are required — the same Drizzle migrations apply.
+
 ### Principles
 
-- **Real database, no mocks**: All tests use a real Postgres database (e.g. via local Docker or a dedicated test schema). This catches SQL issues that mocks would hide.
+- **Real database, no mocks**: All tests use a real Postgres database (Docker locally, Neon or equivalent in CI). This catches SQL issues that mocks would hide.
 - **Fast feedback**: Vitest = sub-second test runs for the web app logic. Python pipeline tests use a dedicated test database.
 - **Fixture-based**: Shared seed data factories for creating test meetings, segments, people, etc.
 - **Two test suites**: Python (pytest) for the pipeline, TypeScript (vitest) for the web app.

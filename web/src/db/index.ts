@@ -1,17 +1,8 @@
-import { PGlite, type PGliteOptions } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
-import { vector } from '@electric-sql/pglite/vector';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import { relations } from './schema';
 
-// export type DbSchema = typeof schema;
+const client = postgres(process.env.DATABASE_URL!);
+const db = drizzle({ client, relations });
 
-// In-memory Postgres for development and testing
-const options: PGliteOptions = {
-    dataDir: "./.pglite/",
-    extensions: { vector },
-};
-const pgLiteClient = new PGlite(options);
-const db = drizzle({ client: pgLiteClient, relations });
-
-
-export { db, pgLiteClient };
+export { db };
