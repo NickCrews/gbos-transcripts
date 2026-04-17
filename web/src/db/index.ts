@@ -5,4 +5,4 @@ import { relations } from './schema';
 const client = postgres(process.env.DATABASE_URL!);
 const db = drizzle({ client, relations });
 
-export { db };
+export { db, client };
