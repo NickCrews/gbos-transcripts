@@ -16,6 +16,7 @@ Typical use in tests:
     actual = capture(conn)
     assert not diff(actual, read(snapshot_dir))
 """
+
 from __future__ import annotations
 
 import csv
@@ -23,6 +24,8 @@ import difflib
 import io
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from psycopg import sql
 
 if TYPE_CHECKING:
     import psycopg
@@ -53,11 +56,11 @@ def capture(conn: psycopg.Connection) -> dict[str, str]:
     result: dict[str, str] = {}
     for table in TABLES:
         cols = _capture_columns(conn, table)
-        col_list = ", ".join(f'"{c}"' for c in cols)
+        col_list = sql.SQL(", ").join(sql.Identifier(c) for c in cols)
         buf = io.StringIO()
         with conn.cursor() as cur:
             with cur.copy(
-                f'COPY (SELECT {col_list} FROM "{table}" ORDER BY id) TO STDOUT CSV HEADER'
+                t"COPY (SELECT {col_list:q} FROM {table:i} ORDER BY id) TO STDOUT CSV HEADER"
             ) as copy:
                 for chunk in copy:
                     buf.write(bytes(chunk).decode())
@@ -115,21 +118,21 @@ def seed(conn: psycopg.Connection, directory: Path) -> None:
         cols = next(csv.reader([header_line]))
         if not cols:
             continue
-        col_list = ", ".join(f'"{c}"' for c in cols)
+        col_list = sql.SQL(", ").join(sql.Identifier(c) for c in cols)
 
         with conn.cursor() as cur:
             with cur.copy(
-                f'COPY "{table}" ({col_list}) FROM STDIN CSV HEADER'
+                t"COPY {table:i} ({col_list:q}) FROM STDIN CSV HEADER"
             ) as copy:
                 copy.write(csv_text.encode())
 
         # Advance the sequence past the highest inserted ID so future
         # auto-assigned inserts don't collide.
         conn.execute(
-            f"""
+            t"""
             SELECT setval(
-                pg_get_serial_sequence('{table}', 'id'),
-                COALESCE((SELECT MAX(id) FROM "{table}"), 0) + 1,
+                pg_get_serial_sequence({table:l}, 'id'),
+                COALESCE((SELECT MAX(id) FROM {table:i}), 0) + 1,
                 false
             )
             """

@@ -2,7 +2,7 @@
 name = "gbos-pipeline"
 version = "0.1.0"
 description = "GBOS meeting transcript pipeline: download, transcribe, diarize, embed"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "parakeet-mlx",
     "diarize",
@@ -17,6 +17,8 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
+    "ruff",
+    "ty",
 ]
 
 [build-system]

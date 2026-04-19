@@ -1,0 +1,10 @@
+test:
+    pytest
+
+fmt:
+    ruff check --fix
+    ty check --fix
+
+lint:
+    ruff check
+    ty check

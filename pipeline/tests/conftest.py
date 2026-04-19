@@ -11,10 +11,12 @@ db_snapshot     — Asserts that a DB URL's current state matches a committed
                   snapshot directory.  Works like syrupy: run with
                   ``pytest --snapshot-update`` to (re)generate snapshots.
 """
+
 from __future__ import annotations
 
 import uuid
 from pathlib import Path
+from typing import Generator
 
 import psycopg
 import pytest
@@ -36,7 +38,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 @pytest.fixture
-def fresh_db() -> str:  # yields a connection URL
+def fresh_db() -> Generator[str, None, None]:
     """
     Fresh, fully-migrated Postgres database per test.
 
@@ -46,7 +48,7 @@ def fresh_db() -> str:  # yields a connection URL
     name = f"gbos_test_{uuid.uuid4().hex[:8]}"
 
     with psycopg.connect(_ADMIN_URL, autocommit=True) as conn:
-        conn.execute(f'CREATE DATABASE "{name}"')
+        conn.execute(t"CREATE DATABASE {name:i}")
 
     db_url = f"postgres://postgres:postgres@localhost:5432/{name}"
 
@@ -57,13 +59,13 @@ def fresh_db() -> str:  # yields a connection URL
         for stmt in migration_sql.split("--> statement-breakpoint"):
             stmt = stmt.strip()
             if stmt:
-                conn.execute(stmt)
+                conn.execute(stmt)  # ty:ignore[no-matching-overload]
         conn.commit()
 
     yield db_url
 
     with psycopg.connect(_ADMIN_URL, autocommit=True) as conn:
-        conn.execute(f'DROP DATABASE IF EXISTS "{name}"')
+        conn.execute(t"DROP DATABASE IF EXISTS {name:i}")
 
 
 @pytest.fixture
@@ -81,15 +83,15 @@ def db_snapshot(request: pytest.FixtureRequest, pytestconfig: pytest.Config):
     """
     update = pytestconfig.getoption("--snapshot-update")
     snapshot_dir = (
-        Path(request.fspath).parent
-        / "snapshots"
-        / Path(request.fspath).stem
-        / request.node.name
+        request.path.parent / "snapshots" / request.path.stem / request.node.name
     )
 
     class _Snapshot:
-        def __eq__(self, db_url: str) -> bool:  # noqa: ANN001
-            from gbos_pipeline.db.snapshot import capture, diff as snap_diff, read, write
+        def __eq__(self, db_url: object) -> bool:
+            if not isinstance(db_url, str):
+                return NotImplemented
+            from gbos_pipeline.db.snapshot import capture, read, write
+            from gbos_pipeline.db.snapshot import diff as snap_diff
 
             with psycopg.connect(db_url) as conn:
                 if update:
