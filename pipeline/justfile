@@ -1,3 +1,6 @@
+init:
+    uv sync
+
 test:
     pytest
 

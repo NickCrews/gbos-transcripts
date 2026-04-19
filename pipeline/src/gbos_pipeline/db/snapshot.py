@@ -1,9 +1,8 @@
 """
 DB snapshot utilities — DuckDB EXPORT-compatible format.
 
-Each snapshot/fixture is a directory containing:
-  schema.sql        column listing per table (documentation only)
-  {table}.csv       one CSV per table, with header row
+Each snapshot/fixture is a directory containing one CSV per table
+({table}.csv), with a header row.
 
 Generated columns (GENERATED ALWAYS) and `created_at` are excluded from
 captures and comparisons, making snapshots deterministic across test runs.
@@ -69,17 +68,9 @@ def capture(conn: psycopg.Connection) -> dict[str, str]:
 
 
 def write(directory: Path, conn: psycopg.Connection) -> None:
-    """Capture DB state and write it to *directory* as schema.sql + CSVs."""
+    """Capture DB state and write it to *directory* as CSVs."""
     directory.mkdir(parents=True, exist_ok=True)
     csv_data = capture(conn)
-
-    schema_lines = [
-        "-- Captured columns per table (excludes generated columns and created_at)"
-    ]
-    for table, csv_text in csv_data.items():
-        header = csv_text.split("\n")[0]
-        schema_lines.append(f"-- {table}: {header}")
-    (directory / "schema.sql").write_text("\n".join(schema_lines) + "\n")
 
     for table, csv_text in csv_data.items():
         (directory / f"{table}.csv").write_text(csv_text)

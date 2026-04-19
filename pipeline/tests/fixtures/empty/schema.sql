@@ -1,5 +1,0 @@
--- Captured columns per table (excludes generated columns and created_at)
--- municipalities: id,name,name_short,state,postcode,youtube_channel_id
--- people: id,name,voice_embedding
--- meetings: id,municipality_id,youtube_id,title,description,start_time,duration_secs
--- segments: id,meeting_id,person_id,text,start_secs,end_secs
