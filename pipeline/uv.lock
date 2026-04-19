@@ -498,7 +498,7 @@ dependencies = [
     { name = "yt-dlp" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -510,13 +510,16 @@ requires-dist = [
     { name = "ffmpeg-python" },
     { name = "parakeet-mlx" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.1" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "sentence-transformers" },
     { name = "sqlite-vec" },
     { name = "yt-dlp" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
 
 [[package]]
 name = "h11"
