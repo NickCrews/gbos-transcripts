@@ -1,0 +1,24 @@
+{
+  "name": "gbos-pipeline",
+  "version": "0.1.0",
+  "description": "GBOS meeting transcript pipeline: download, transcribe, diarize, embed",
+  "type": "module",
+  "scripts": {
+    "download-models": "tsx scripts/download-models.ts",
+    "update": "tsx src/update.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@xenova/transformers": "^2.17.2",
+    "dotenv": "^16",
+    "pgvector": "^0.2.0",
+    "postgres": "^3",
+    "sherpa-onnx": "^1.10.30"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}
