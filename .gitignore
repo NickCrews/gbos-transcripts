@@ -1,15 +1,13 @@
 # Data
 data/
 
-# Python
-__pycache__/
-*.pyc
-.venv/
-*.egg-info/
+# Downloaded ONNX models (~45MB, fetched via pnpm download-models)
+models/
 
 # Node
 node_modules/
 dist/
+.output/
 
 # Environment
 .env

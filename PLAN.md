@@ -11,165 +11,152 @@ The data model is designed to be **municipality-agnostic** so additional governm
 - **Council Data Project**: Open-source, Python+TS, closest match — but uses Google Cloud services and Firebase
 - **MeetingBank**: Research dataset covering 6 municipalities with agenda-item-linked transcripts. Our schema follows its structure: meetings contain agenda items, agenda items contain transcript segments with timing info
 - **Hamlet / OpenCouncil / Councilmatic**: Production platforms, SaaS or tightly coupled to their own infra
+- **OpenWhispr**: Open-source meeting assistant using sherpa-onnx for local speaker diarization — our diarization pipeline follows their architecture
 
 ## Tech Stack
 
 | Component | Choice | Why |
 |---|---|---|
-| Download | `yt-dlp` | Best YouTube downloader, audio-only extraction |
-| Transcription | `parakeet-mlx` (`mlx-community/parakeet-tdt-0.6b-v2`) | Fast on Apple Silicon via MLX, word+segment timestamps, simple pip install |
-| Diarization | [`diarize`](https://github.com/FoxNoseTech/diarize) | Apache 2.0, no GPU/API keys needed, ~10.8% DER, 8x faster than realtime on CPU |
-| Speaker embeddings | WeSpeaker ResNet34-LM (via `diarize` internals) | 256-dim voice fingerprints for cross-meeting speaker matching |
-| Text embeddings | `sentence-transformers` (`all-MiniLM-L6-v2`, 384-dim) | Fast on CPU, small vectors, good quality for semantic search |
+| Download | `yt-dlp` (CLI) | Best YouTube downloader, audio-only extraction |
+| Transcription | `@xenova/transformers` (`Xenova/whisper-large-v3`) | Whisper via ONNX in Node.js, word-level timestamps, no Python |
+| Diarization | `sherpa-onnx` | Native ONNX bindings, no Python/GPU, ~30s for 45-min meeting on M1 |
+| Speaker embeddings | CAM++ via sherpa-onnx (512-dim) | Half the params of ECAPA-TDNN, lower EER, fast CPU inference, ONNX export |
+| Text embeddings | `@xenova/transformers` (`Xenova/all-MiniLM-L6-v2`, 384-dim) | Same model as sentence-transformers, runs in Node.js via ONNX |
 | Database | Postgres + pgvector + Drizzle ORM | |
-| Pipeline | Python 3.13 via `uv` | All ML tooling is Python-native |
-| Query embeddings | `@xenova/transformers` (ONNX in Node) | Encode search queries in JS, no Python sidecar needed |
+| Pipeline | TypeScript + Node.js via `tsx`/`pnpm` | Unified stack — no Python sidecar, no runtime boundary |
 | Web App | SolidJS + TanStack Start + TanStack Router | SSR-capable frontend with file-based routing, server functions |
 
-**Drizzle as source of truth**: The schema is defined in `web/src/db/schema.ts` using Drizzle ORM. The Python pipeline uses raw SQL but the schema creation SQL is generated from the Drizzle definitions via `drizzle-kit`. Both sides connect to the same Postgres database.
+**No Python required.** All ML runs through ONNX models loaded either by `sherpa-onnx` (diarization) or `@xenova/transformers` (transcription, text embedding). The only native dependency is `ffmpeg` for audio decoding.
+
+**Drizzle as source of truth**: The schema is defined in `web/src/db/schema.ts`. The pipeline connects to the same Postgres database using `postgres` (postgres-js) with raw SQL.
 
 ### What we add beyond MeetingBank
 
 - **People**: Persistent speaker identity across meetings with voice embeddings
-- **Voice fingerprinting**: Automatic cross-meeting speaker linking
+- **Voice fingerprinting**: Automatic cross-meeting speaker linking via CAM++ 512-dim embeddings
+
+## Diarization Architecture
+
+Follows the [OpenWhispr local diarization approach](https://openwhispr.com/blog/local-speaker-diarization), implemented entirely through sherpa-onnx native Node.js bindings:
+
+1. **Silero VAD** (~2MB) — filter silence before expensive stages
+2. **pyannote-3.0 segmentation** (~6.6MB ONNX) — identify speaker boundaries and overlapping speech
+3. **CAM++ embeddings** (~28MB ONNX) — 512-dim voice fingerprints per segment
+4. **Agglomerative clustering** — group embeddings at 0.5 cosine-similarity threshold
+
+Total model size: ~45MB, downloaded once via `pnpm download-models`. The only network activity after first launch is the one-time model download.
+
+**Minimum segment duration**: 0.8 seconds for reliable CAM++ embedding extraction.
 
 ## Cross-Meeting Speaker Identification
 
-This is the key innovation beyond basic diarization. Instead of anonymous SPEAKER_00 labels per meeting, we build a persistent speaker database with voice fingerprints.
+Instead of anonymous `SPEAKER_00` labels per meeting, we maintain a persistent speaker database with voice fingerprints.
 
 ### How it works
 
-1. **During diarization** (`diarize_audio.py`): The `diarize` library produces speaker turns with timing:
-   ```python
-   from diarize import diarize
+1. **Diarization** (`pipeline/src/diarize.ts`): sherpa-onnx produces speaker turns + CAM++ 512-dim embeddings per speaker (mean-pooled over their segments).
 
-   result = diarize("meeting.wav")
-   for seg in result.segments:
-       print(f"[{seg.start:.1f}s - {seg.end:.1f}s] {seg.speaker}")
+2. **Identify** (`pipeline/src/identify.ts`): For each speaker embedding, query `people` by cosine distance:
+   ```sql
+   SELECT id FROM people
+   WHERE voice_embedding <=> $vec::vector < 0.45  -- similarity > 0.55
+   ORDER BY voice_embedding <=> $vec::vector
+   LIMIT 1
    ```
-   The library internally uses WeSpeaker ResNet34-LM (ONNX) to produce 256-dim speaker embeddings during its pipeline. We extract these embeddings per-speaker for cross-meeting matching.
+   Confidence tiers (matching OpenWhispr):
+   - **≥ 0.70 similarity**: auto-confirm
+   - **0.55–0.70**: suggest (auto-confirm for now, can add UX prompt later)
+   - **< 0.55**: create new `Unknown Speaker` row
 
-2. **Extract voice embeddings** (`identify.py`): For each speaker label in the diarization result, we access the WeSpeaker embeddings that `diarize` already computed. The library's embedding extraction step produces 256-dim vectors per speech segment — we aggregate these per speaker (mean pooling over their segments) to get one voice fingerprint per speaker per meeting.
+3. **Link segments**: Each aligned transcript segment gets `person_id` set to the matched or newly-created person.
 
-3. **Match against known people** (`identify.py`): Query `vec_people` for cosine similarity
-   ```python
-   # Search for matching voice in database
-   # cosine similarity threshold: 0.6 (tunable)
-   # pgvector operator <=> is cosine distance
-   results = db.execute("""
-       SELECT person_id, (voice_embedding <=> %s) as distance 
-       FROM vec_people
-       WHERE voice_embedding <=> %s < 0.4
-       ORDER BY distance LIMIT 1
-   """, [embedding, embedding])
-   ```
-   - **Match found (distance < 0.4, i.e. similarity > 0.6)**: Link segments to existing `person_id`, update their aggregate embedding with running average
-   - **No match**: Create new `people` row with this embedding, store in `vec_people`. Name defaults to "Unknown Speaker N" until manually labeled.
-
-4. **Update aggregate embedding**: As a person appears in more meetings, their voice fingerprint becomes more robust:
-   ```python
-   # Running average: new_avg = (old_avg * count + new_embedding) / (count + 1)
-   new_embedding = (person.voice_embedding * person.voice_sample_count + embedding) / (count + 1)
-   ```
-
-5. **Manual override** (`manage_people.py`): CLI to merge duplicate people, assign names, set roles:
-   ```bash
-   uv run python -m gbos_pipeline.manage_people list           # Show all people
-   uv run python -m gbos_pipeline.manage_people name 3 "Mike Edgington"
-   uv run python -m gbos_pipeline.manage_people merge 3 7      # Merge person 7 into 3
-   uv run python -m gbos_pipeline.manage_people role 3 gbos board_member --start 2023-01
-   ```
-
-### Why `diarize` over pyannote
-
-- **Apache 2.0** — no HuggingFace token or account needed, fully permissive license
-- **No GPU required** — runs 8x faster than realtime on CPU (a 2-hour meeting diarizes in ~15 min)
-- **Simple API** — `diarize("file.wav")` returns segments, no pipeline configuration
-- **~10.8% DER** — comparable to pyannote free tier (~11.2%), good enough for government meetings
-- **WeSpeaker embeddings** — 256-dim vectors from the same pipeline, reusable for cross-meeting matching
+4. **Manual override** (future CLI): `tsx pipeline/src/manage-people.ts name 3 "Mike Edgington"`, merge duplicates, assign roles.
 
 ### Why this works well for GBOS
 
 - Meetings have ~5-7 recurring board members + a few staff → small, stable speaker set
 - After 2-3 meetings, the system will reliably recognize regulars
-- Public commenters get auto-created as new people; can be left unnamed or merged
-- The threshold (0.6 cosine similarity) can be tuned per municipality
+- Public commenters auto-created as new people; can be left unnamed or merged
+- The threshold (0.55) is tunable per municipality
 
 ## Pipeline Stages (each idempotent)
 
-1. **Discover + Download** (`download.py`): `yt-dlp --flat-playlist` → find new videos → download audio as WAV → insert meeting row → status=`downloaded`
+Status tracked in `meetings.status` column:
 
-2. **Transcribe** (`transcribe.py`): Parakeet MLX → sentence+word timestamps → save raw JSON → status=`transcribed`
-   ```python
-   from parakeet_mlx import from_pretrained
-   model = from_pretrained("mlx-community/parakeet-tdt-0.6b-v2")
-   result = model.transcribe("audio.wav")
-   # result.sentences → [AlignedSentence(text="...", start=1.01, end=2.04, tokens=[...])]
-   ```
+1. **Discover + Download** (`download.ts`): `yt-dlp --flat-playlist` → find new videos → download audio as WAV → insert meeting row → `status='downloaded'`
 
-3. **Diarize + Identify** (`diarize_audio.py` + `identify.py`): `diarize` library → speaker turns + WeSpeaker embeddings → match against `vec_people` → link or create people → status=`diarized`
+2. **Transcribe** (`transcribe.ts`): `@xenova/transformers` Whisper → word+segment timestamps → saved to `meetings.transcription` (JSONB) → `status='transcribed'`
 
-4. **Align** (`align.py`): Merge Parakeet transcript segments with pyannote speaker turns by overlapping timestamps. Each segment gets assigned to the person who spoke during that window. Insert segments into DB.
+3. **Diarize** (`diarize.ts`): sherpa-onnx four-stage pipeline → speaker turns + CAM++ embeddings → saved to `meetings.diarization` (JSONB) → `status='diarized'`
 
-5. **Embed** (`embed.py`): sentence-transformers encode segment texts → store in `vec_segments` → status=`embedded`
+4. **Align + Identify** (`align.ts` + `identify.ts`): merge Whisper segments with speaker turns by word-level timestamps → match embeddings against `people` → insert segments with `person_id` → `status='aligned'`
 
-6. **Orchestrator** (`update.py`): Runs stages 1-5, skipping already-processed meetings
+5. **Embed** (`embed.ts`): `@xenova/transformers` `all-MiniLM-L6-v2` → 384-dim text vectors → stored in `segments.text_embedding` → `status='embedded'`
 
-**Hybrid search**: Postgres Full Text Search (tsvector) + pgvector (cosine), normalize to [0,1], combine (0.6 semantic + 0.4 lexical), deduplicate, re-rank. Integrated directly into web app server functions.
+6. **Orchestrator** (`update.ts`): runs stages 1–5, skipping already-processed meetings, resumable from any stage
+
+**Hybrid search**: Postgres Full Text Search (tsvector) + pgvector cosine, normalized to [0,1], combined (0.6 semantic + 0.4 lexical). Integrated directly into web app server functions.
 
 ## Daily Update (Cron)
 
 ```
-0 3 * * * /Users/nc/code/gbos/scripts/daily-update.sh
+0 3 * * * cd /path/to/gbos-transcripts/pipeline && pnpm update
 ```
 
-GBOS publishes ~2-4 meetings/month. Most runs find nothing new. New meeting processing: download (~5 min), transcribe (fast via MLX), diarize + identify (~minutes), embed (~seconds).
+GBOS publishes ~2-4 meetings/month. Most runs find nothing new. New meeting processing: download (~5 min), transcribe (Whisper, varies by length), diarize (~30s for 45-min on M1), align+identify (~seconds), embed (~seconds).
 
 ## Build Phases
 
-1. **Foundation**: Init uv + pnpm projects, implement `db.py` (full schema), `download.py` (yt-dlp), test with 1 short meeting
-2. **Transcription + Diarization + Speaker Matching**: Implement `transcribe.py` (parakeet-mlx), `diarize_audio.py` (`diarize` lib), `identify.py` (voice embedding matching via WeSpeaker), `align.py` (merge). No tokens/accounts needed. Test end-to-end on 2-3 meetings, verify speakers are linked across them.
-3. **Embeddings**: Implement `embed.py` to generate and store text embeddings
-4. **Web App Foundation**: Build basic SolidJS + TanStack Start site with database connectivity
-5. **Search + Detail Pages**: Implement hybrid search, meeting detail with transcript viewer, and people directory using TanStack Start server functions
-6. **Audio Clips + People Management**: `ffmpeg`-based audio slicing, `manage_people.py` CLI
-7. **Daily Updates + Backfill**: `update.py` orchestrator, cron, then process all ~188 meetings
-8. **Enhancements** (future): Agenda item population from MOA website, LLM meeting summaries, topic alerts, SRT/VTT export
+1. **Foundation**: Init pipeline pnpm project, implement `db.ts`, `download.ts`, test with 1 short meeting
+2. **Transcription + Diarization**: Implement `transcribe.ts` (`@xenova/transformers` Whisper), `diarize.ts` (sherpa-onnx), `align.ts`. Download models (`pnpm download-models`). Test end-to-end on 2-3 meetings.
+3. **Speaker Matching**: Implement `identify.ts`, verify speakers are linked across meetings
+4. **Embeddings**: Implement `embed.ts` + add `text_embedding` column to segments
+5. **Web App Foundation**: Build basic SolidJS + TanStack Start site with DB connectivity
+6. **Search + Detail Pages**: Hybrid search, meeting detail with transcript viewer, people directory using TanStack Start server functions
+7. **Audio Clips + People Management**: `ffmpeg`-based audio slicing, `manage-people.ts` CLI
+8. **Daily Updates + Backfill**: `update.ts` orchestrator, cron, then process all ~188 meetings
+9. **Enhancements** (future): Agenda item population from MOA website, LLM meeting summaries, topic alerts, SRT/VTT export
 
 ## Verification
 
 - **Pipeline**: Download + transcribe + diarize 1 short meeting, verify segments with speaker labels in DB
-- **Speaker matching**: Process 2-3 meetings, verify that recurring board members are linked to the same `person_id` across meetings
+- **Speaker matching**: Process 2-3 meetings, verify recurring board members link to the same `person_id`
 - **Alignment**: Spot-check segments against actual video — verify text and speaker attribution
 - **Search**: Query known phrases, compare lexical vs semantic results in web app
-- **Audio clips**: Request a segment's audio, verify it plays the correct portion
-- **Idempotency**: Run update twice, verify no duplicates
+- **Idempotency**: Run `pnpm update` twice, verify no duplicates
 - **Multi-municipality**: Verify schema supports adding a second municipality without schema changes
-- **Web app**: Dev server starts, pages render, search returns results, navigation works between meetings/people/search
+- **Web app**: Dev server starts, pages render, search returns results, navigation works
 
 ## Key Dependencies
 
 ```
-# pipeline/pyproject.toml
-parakeet-mlx          # MLX-optimized transcription
-diarize               # Speaker diarization (Apache 2.0, no GPU/tokens needed)
-                      # Internally uses WeSpeaker ResNet34-LM for 256-dim embeddings
-sentence-transformers # Text embedding generation
-yt-dlp                # YouTube download
-ffmpeg-python         # Audio slicing for audio clipping
-pgvector              # Vector search client for Postgres
+# pipeline/package.json
+sherpa-onnx              # Native ONNX bindings: VAD + pyannote segmentation + CAM++ + clustering
+@xenova/transformers     # Whisper transcription + all-MiniLM-L6-v2 text embedding (ONNX in Node)
+postgres                 # postgres-js driver
+pgvector                 # Vector serialization helpers for postgres-js
+dotenv                   # Environment variable loading
+
+# External binaries (must be installed separately)
+yt-dlp                   # YouTube download
+ffmpeg                   # Audio decoding to 16kHz PCM (used by diarize.ts)
+
+# pipeline/models/  (~45MB, downloaded via `pnpm download-models`, gitignored)
+sherpa-onnx-pyannote-segmentation-3-0/model.onnx          # ~6.6MB
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx  # ~28MB
+silero_vad.onnx                                            # ~2MB
 
 # web/package.json
-drizzle-orm           # Type-safe ORM + query builder
-postgres              # postgres-js driver (used by drizzle)
-drizzle-kit           # Schema tooling / migrations
-vite-plugin-solid     # Vite integration for SolidJS
-@tanstack/solid-start # TanStack Start framework for SolidJS
-@tanstack/solid-router # File-based routing for SolidJS
-solid-js              # UI framework
-vite                  # Build tool
-@xenova/transformers  # Query embedding in JS (ONNX)
-vitest                # Test runner
+drizzle-orm              # Type-safe ORM + query builder
+postgres                 # postgres-js driver
+drizzle-kit              # Schema tooling / migrations
+vite-plugin-solid        # Vite integration for SolidJS
+@tanstack/solid-start    # TanStack Start framework for SolidJS
+@tanstack/solid-router   # File-based routing for SolidJS
+solid-js                 # UI framework
+vite                     # Build tool
+@xenova/transformers     # Query embedding in JS (ONNX) — shared with pipeline
+vitest                   # Test runner
 ```
 
 ## Testing Architecture
@@ -184,115 +171,74 @@ pnpm --filter gbos-web db:setup
 pnpm db:setup
 ```
 
-This runs `docker compose up -d --wait` (waits for the health check to pass) then `drizzle-kit migrate`. The connection string for local dev is:
+This runs `docker compose up -d --wait` then `drizzle-kit migrate`. The connection string for local dev:
 
 ```
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/gbos
 ```
 
-**Production**: swap `DATABASE_URL` for a cloud-hosted Postgres URL, e.g. [Neon](https://neon.tech). No other code changes are required — the same Drizzle migrations apply.
+**Production**: swap `DATABASE_URL` for a cloud-hosted Postgres URL (e.g. Neon). No other code changes required.
 
 ### Principles
 
-- **Real database, no mocks**: All tests use a real Postgres database (Docker locally, Neon or equivalent in CI). This catches SQL issues that mocks would hide.
-- **Fast feedback**: Vitest = sub-second test runs for the web app logic. Python pipeline tests use a dedicated test database.
-- **Fixture-based**: Shared seed data factories for creating test meetings, segments, people, etc.
-- **Two test suites**: Python (pytest) for the pipeline, TypeScript (vitest) for the web app.
+- **Real database, no mocks**: All tests use a real Postgres database (Docker locally, Neon in CI)
+- **Fast feedback**: Vitest = sub-second test runs
+- **Fixture-based**: Shared seed data factories for creating test meetings, segments, people
+- **Single test suite**: TypeScript (vitest) for both pipeline logic and web app — no Python pytest
 
 ### Web App Tests (TypeScript / vitest)
 
 ```
 web/src/__tests__/
 ├── fixtures/
-│   ├── db.ts               # createTestDb() → Test Postgres schema with full schema + seed data
-│   ├── seed.ts              # Factory functions: createMeeting(), createPerson(), createSegment()
-│   └── sample-embeddings.ts # Pre-computed 384-dim vectors for search tests
-├── meetings.test.ts         # Server functions: List, filter by date/type/municipality, get by ID
-├── search.test.ts           # Hybrid search logic (lexical + semantic)
-├── people.test.ts           # Server functions: List, filter by role, get segments by person
-└── segments.test.ts         # Server functions: Get by meeting, time range, audio clip params
+│   ├── db.ts                 # createTestDb() → test Postgres instance
+│   ├── seed.ts               # createMeeting(), createPerson(), createSegment()
+│   └── sample-embeddings.ts  # Pre-computed 384-dim text vectors + 512-dim voice vectors
+├── meetings.test.ts          # List, filter, get by ID
+├── search.test.ts            # Hybrid search (lexical + semantic)
+├── people.test.ts            # List, filter by role, get segments by person
+└── segments.test.ts          # Get by meeting, time range, audio clip params
 ```
 
-**Test DB factory** (`fixtures/db.ts`):
-```typescript
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from '../../db/schema';
-
-export function createTestDb() {
-  const queryClient = postgres("postgres://postgres:postgres@localhost:5432/gbos_test");
-  const db = drizzle(queryClient, { schema });
-  // Ensure pgvector extension and schema exist
-  // Seed with test data
-  return db;
-}
-```
-
-**What we test**:
-- Correct query results with known seed data
-- Pagination (page/limit, total count)
-- Filters (by date range, speaker, municipality, meeting type)
-- Edge cases: empty results, invalid IDs, missing params
-- Search ranking: known phrases rank higher than unrelated content
-- Hybrid search: combining lexical + semantic returns better results than either alone
-
-### Pipeline Tests (Python / pytest)
+### Pipeline Tests (TypeScript / vitest)
 
 ```
-pipeline/tests/
-├── conftest.py              # Shared fixtures: tmp_db, sample audio paths
-├── test_download.py         # yt-dlp metadata parsing, deduplication logic
-├── test_transcribe.py       # Parakeet output parsing (uses pre-recorded JSON fixtures, not live model)
-├── test_diarize.py          # Diarization output parsing (uses pre-recorded fixtures)
-├── test_align.py            # Timestamp merging: transcript segments + speaker turns → merged segments
-├── test_identify.py         # Voice embedding matching: cosine similarity, threshold, merge logic
-├── test_embed.py            # Text embedding insertion, vec_segments sync
-├── test_ingest.py           # Full pipeline orchestration, status transitions, idempotency
-└── fixtures/
-    ├── sample_transcript.json   # Pre-recorded Parakeet output
-    ├── sample_diarization.json  # Pre-recorded diarize output
-    └── sample_embeddings.npy    # Pre-computed voice + text embeddings
+pipeline/src/__tests__/
+├── fixtures/
+│   ├── sample_transcript.json    # Pre-recorded @xenova/transformers Whisper output
+│   ├── sample_diarization.json   # Pre-recorded sherpa-onnx diarization output
+│   └── sample_embeddings.json    # Pre-computed 512-dim CAM++ voice embeddings
+├── align.test.ts             # Transcript + speaker turn merging (pure logic, no models)
+├── identify.test.ts          # Cosine similarity matching, threshold, new person creation
+└── update.test.ts            # Pipeline status transitions, idempotency
 ```
 
 **Key pipeline test strategies**:
 
-- **Alignment tests** (`test_align.py`): The most logic-heavy unit. Test with known inputs:
+- **Alignment tests** (`align.test.ts`): Pure logic — no models. Test with known inputs:
   - Simple case: 1 speaker, segments map cleanly
-  - Multi-speaker: segments split at speaker turn boundaries using word timestamps
+  - Multi-speaker: word-level split at speaker turn boundaries
   - Edge: speaker turn starts mid-word, overlapping turns
-  - Use fixture JSON, not live models — this is pure logic
 
-- **Identify tests** (`test_identify.py`): Test the matching logic:
+- **Identify tests** (`identify.test.ts`): Test matching logic:
   - Known person: embedding close to existing → links correctly
   - New person: embedding far from all existing → creates new entry
-  - Running average: embedding updates correctly after N samples
-  - Merge: two people merged, embeddings recalculated
 
-- **Ingest/idempotency tests** (`test_ingest.py`): Run pipeline on same input twice, verify:
-  - No duplicate meetings, segments, or people
-  - Status transitions are correct
-  - Error recovery: set a meeting to 'error', re-run, verify it retries
-
-- **Download tests** (`test_download.py`): Mock yt-dlp subprocess output, test:
-  - Title parsing → meeting_date, meeting_type extraction
-  - Deduplication: existing youtube_id skipped
-  - New video detected and queued
+- **Idempotency**: Run pipeline on same input twice, verify no duplicate meetings/segments/people
 
 ### Integration Test (end-to-end)
 
-One integration test that runs the full pipeline on a short (~5 min) audio sample:
-1. Download (or use a cached fixture audio file)
-2. Transcribe with Parakeet
-3. Diarize with `diarize`
-4. Align + identify speakers
-5. Embed text
-6. Start web app against the resulting DB
-7. Call search server function, verify results include known content from the audio
+One integration test that runs the full pipeline on a short (~5 min) audio sample using real models:
+1. Transcribe with `@xenova/transformers` Whisper
+2. Diarize with sherpa-onnx
+3. Align + identify speakers
+4. Embed text
+5. Call search server function, verify results include known content
 
-This test is slow (~30s) and marked as `@pytest.mark.integration` / `vitest.skip` by default, run explicitly via `pytest -m integration` or a CI flag.
+Marked `vitest.skip` by default, run explicitly via `INTEGRATION=1 vitest run`.
 
 ### CI Considerations
 
-- **Fast tests** (< 5s): All unit tests for both pipeline and web app — run on every push
-- **Integration test** (~30s): Run on PR merge or nightly — requires the ML models to be cached
-- **Backfill smoke test**: After processing a batch, run a health check script that verifies segment counts, search index sync, and vec_segments completeness
+- **Fast tests** (< 5s): All unit tests — run on every push
+- **Integration test** (~30s): Run on PR merge or nightly — requires models cached
+- **Backfill smoke test**: After processing a batch, verify segment counts and search index sync

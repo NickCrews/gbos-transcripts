@@ -1,2 +1,2 @@
-// WeSpeaker ResNet34-LM model produces 256-dimensional embeddings
-export const N_DIMENSIONS = 256;
+// CAM++ model (via sherpa-onnx) produces 512-dimensional embeddings
+export const N_DIMENSIONS = 512;

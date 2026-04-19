@@ -1,14 +1,13 @@
 import { defineRelations, SQL, sql } from "drizzle-orm";
 import {
     pgTable,
-    pgEnum,
     integer,
     interval,
+    jsonb,
     timestamp,
     serial,
     varchar,
     vector,
-    real,
     index,
 } from "drizzle-orm/pg-core";
 import { N_DIMENSIONS as N_VOICE_EMBEDDING_DIMENSIONS } from "~/features/voice_embeddings";
@@ -35,6 +34,9 @@ export const meetingsTable = pgTable("meetings", {
     description: varchar().notNull().default(""),
     start_time: timestamp(),
     duration_secs: secondsInterval(),
+    status: varchar().notNull().default("discovered"),
+    transcription: jsonb(),
+    diarization: jsonb(),
     created_at: timestamp().notNull().defaultNow(),
 });
 
