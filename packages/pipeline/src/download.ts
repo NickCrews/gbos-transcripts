@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm";
 import { db, meetingsTable, municipalitiesTable } from "@gbos/db";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
-const CHANNEL_URL = "https://www.youtube.com/channel/UCOUlNInprZEjhbpVPiJOlEA";
 const CHANNEL_ID = "UCOUlNInprZEjhbpVPiJOlEA";
+const CHANNEL_URL = `https://www.youtube.com/channel/${CHANNEL_ID}`;
 
 export async function discoverNewVideos() {
   const raw = execSync(`yt-dlp --flat-playlist -J "${CHANNEL_URL}"`, {
