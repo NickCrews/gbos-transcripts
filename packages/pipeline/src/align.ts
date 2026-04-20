@@ -27,7 +27,7 @@ export function alignTranscriptWithSpeakers(
       if (!text) continue;
       aligned.push({
         text,
-        start: group.words[0].start,
+        start: group.words[0]!.start,
         end: group.words.at(-1)!.end,
         speaker: group.speaker,
       });

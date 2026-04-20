@@ -48,13 +48,16 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
       drizzle-kit:
         specifier: 1.0.0-beta.22
         version: 1.0.0-beta.22
 
   packages/pipeline:
     dependencies:
-      '@gbos/db':
+      '@gbos/core':
         specifier: workspace:*
         version: link:../core
       '@xenova/transformers':
@@ -76,7 +79,7 @@ importers:
 
   packages/web:
     dependencies:
-      '@gbos/db':
+      '@gbos/core':
         specifier: workspace:*
         version: link:../core
       '@t3-oss/env-core':
@@ -3512,7 +3515,6 @@ snapshots:
   '@types/node@25.6.0':
     dependencies:
       undici-types: 7.19.2
-    optional: true
 
   '@types/readable-stream@4.0.23':
     dependencies:
@@ -4870,8 +4872,7 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici-types@7.19.2:
-    optional: true
+  undici-types@7.19.2: {}
 
   undici@7.25.0: {}
 

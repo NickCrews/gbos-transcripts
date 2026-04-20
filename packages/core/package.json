@@ -1,9 +1,11 @@
 {
-  "name": "@gbos/db",
+  "name": "@gbos/core",
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/db/index.ts"
+    "./db": "./src/db/index.ts",
+    "./youtube": "./src/youtube/index.ts",
+    "./munis": "./src/munis/index.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -19,6 +21,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "drizzle-kit": "1.0.0-beta.22"
   }
 }

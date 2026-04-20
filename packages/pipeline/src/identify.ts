@@ -1,5 +1,5 @@
 import { cosineDistance, sql } from "drizzle-orm";
-import { db, peopleTable, segmentsTable } from "@gbos/db";
+import { type DB, peopleTable, segmentsTable } from "@gbos/core/db";
 
 // Confidence tiers from OpenWhispr's matching system:
 //   ≥ 0.70 cosine similarity → auto-confirm
@@ -9,6 +9,7 @@ const MATCH_THRESHOLD = 0.55;
 const MAX_DISTANCE = 1 - MATCH_THRESHOLD;
 
 export async function identifyAndInsertSegments(
+  db: DB,
   meetingId: number,
   alignedSegments: Array<{
     text: string;
@@ -21,7 +22,7 @@ export async function identifyAndInsertSegments(
   // Resolve each local speaker index to a DB person
   const speakerToPersonId = new Map<number, number>();
   for (const [speakerId, embedding] of speakerEmbeddings) {
-    speakerToPersonId.set(speakerId, await findOrCreatePerson(embedding));
+    speakerToPersonId.set(speakerId, await findOrCreatePerson(db, embedding));
   }
 
   for (const seg of alignedSegments) {
@@ -35,7 +36,7 @@ export async function identifyAndInsertSegments(
   }
 }
 
-async function findOrCreatePerson(embedding: Float32Array): Promise<number> {
+async function findOrCreatePerson(db: DB, embedding: Float32Array): Promise<number> {
   const vec = Array.from(embedding);
   const distance = cosineDistance(peopleTable.voice_embedding, vec);
 

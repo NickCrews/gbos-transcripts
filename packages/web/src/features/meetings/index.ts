@@ -1,4 +1,4 @@
-import { db, meetingsTable } from "@gbos/db";
+import { db, meetingsTable } from "@gbos/core/db";
 
 export function getAllMeetings() {
   return db.select().from(meetingsTable);

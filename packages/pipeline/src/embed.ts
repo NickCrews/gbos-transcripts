@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { db, segmentsTable } from "@gbos/db";
+import { type DB, segmentsTable } from "@gbos/core/db";
 
 // all-MiniLM-L6-v2 via ONNX — same model as sentence-transformers, runs in Node.js
 // Downloads once to ~/.cache/huggingface/hub
@@ -10,7 +10,7 @@ async function loadEmbedder() {
   return pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
 }
 
-export async function embedSegments(meetingId: number): Promise<void> {
+export async function embedSegments(db: DB, meetingId: number): Promise<void> {
   _embedder ??= await loadEmbedder();
 
   const segments = await db
