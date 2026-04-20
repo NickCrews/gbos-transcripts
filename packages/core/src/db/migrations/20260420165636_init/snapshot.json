@@ -1,8 +1,10 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "2def62c4-30bd-41ef-a038-a47ec601901c",
-  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "id": "2c0745be-c5f3-4b1f-9cf3-531d27cf6d0a",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -131,6 +133,45 @@
       "generated": null,
       "identity": null,
       "name": "duration_secs",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "meetings"
+    },
+    {
+      "type": "varchar",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'discovered'",
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "meetings"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "transcription",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "meetings"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "diarization",
       "entityType": "columns",
       "schema": "public",
       "table": "meetings"
@@ -295,7 +336,7 @@
       "table": "people"
     },
     {
-      "type": "vector(256)",
+      "type": "vector(512)",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -402,6 +443,19 @@
       "table": "segments"
     },
     {
+      "type": "vector(384)",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "text_embedding",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "segments"
+    },
+    {
       "type": "timestamp",
       "typeSchema": null,
       "notNull": true,
@@ -440,10 +494,14 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["municipality_id"],
+      "columns": [
+        "municipality_id"
+      ],
       "schemaTo": "public",
       "tableTo": "municipalities",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "meetings_municipality_id_municipalities_id_fkey",
@@ -453,10 +511,14 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["meeting_id"],
+      "columns": [
+        "meeting_id"
+      ],
       "schemaTo": "public",
       "tableTo": "meetings",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "segments_meeting_id_meetings_id_fkey",
@@ -466,10 +528,14 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["person_id"],
+      "columns": [
+        "person_id"
+      ],
       "schemaTo": "public",
       "tableTo": "people",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "segments_person_id_people_id_fkey",
@@ -478,7 +544,9 @@
       "table": "segments"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "meetings_pkey",
       "schema": "public",
@@ -486,7 +554,9 @@
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "municipalities_pkey",
       "schema": "public",
@@ -494,7 +564,9 @@
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "people_pkey",
       "schema": "public",
@@ -502,7 +574,9 @@
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "segments_pkey",
       "schema": "public",
