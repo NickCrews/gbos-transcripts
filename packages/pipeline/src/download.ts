@@ -1,11 +1,11 @@
-import { execFileSync } from 'node:child_process';
-import { execSync } from 'node:child_process';
-import { mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { sql } from './db.ts';
+import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
+import { mkdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { sql } from "./db.ts";
 
-const AUDIO_DIR = process.env.AUDIO_DIR ?? './data/audio';
-const CHANNEL_URL = 'https://www.youtube.com/channel/UCOUlNInprZEjhbpVPiJOlEA';
+const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
+const CHANNEL_URL = "https://www.youtube.com/channel/UCOUlNInprZEjhbpVPiJOlEA";
 
 export async function discoverAndDownload(): Promise<void> {
   mkdirSync(AUDIO_DIR, { recursive: true });
@@ -22,18 +22,27 @@ export async function discoverAndDownload(): Promise<void> {
     RETURNING id
   `;
 
-  for (const entry of playlist.entries as Array<{ id: string; title?: string }>) {
+  for (const entry of playlist.entries as Array<{
+    id: string;
+    title?: string;
+  }>) {
     const youtubeId = entry.id;
-    const title = entry.title ?? '';
+    const title = entry.title ?? "";
 
-    const existing = await sql`SELECT id FROM meetings WHERE youtube_id = ${youtubeId}`;
+    const existing =
+      await sql`SELECT id FROM meetings WHERE youtube_id = ${youtubeId}`;
     if (existing.length > 0) continue;
 
     const audioPath = join(AUDIO_DIR, `${youtubeId}.wav`);
     if (!existsSync(audioPath)) {
-      execFileSync('yt-dlp', [
-        '-x', '--audio-format', 'wav', '--audio-quality', '0',
-        '-o', audioPath,
+      execFileSync("yt-dlp", [
+        "-x",
+        "--audio-format",
+        "wav",
+        "--audio-quality",
+        "0",
+        "-o",
+        audioPath,
         `https://www.youtube.com/watch?v=${youtubeId}`,
       ]);
     }

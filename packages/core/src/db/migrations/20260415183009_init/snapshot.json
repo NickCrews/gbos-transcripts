@@ -2,9 +2,7 @@
   "version": "8",
   "dialect": "postgres",
   "id": "2def62c4-30bd-41ef-a038-a47ec601901c",
-  "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
-  ],
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -442,14 +440,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "municipality_id"
-      ],
+      "columns": ["municipality_id"],
       "schemaTo": "public",
       "tableTo": "municipalities",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "meetings_municipality_id_municipalities_id_fkey",
@@ -459,14 +453,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "meeting_id"
-      ],
+      "columns": ["meeting_id"],
       "schemaTo": "public",
       "tableTo": "meetings",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "segments_meeting_id_meetings_id_fkey",
@@ -476,14 +466,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "person_id"
-      ],
+      "columns": ["person_id"],
       "schemaTo": "public",
       "tableTo": "people",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "segments_person_id_people_id_fkey",
@@ -492,9 +478,7 @@
       "table": "segments"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "meetings_pkey",
       "schema": "public",
@@ -502,9 +486,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "municipalities_pkey",
       "schema": "public",
@@ -512,9 +494,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "people_pkey",
       "schema": "public",
@@ -522,9 +502,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "segments_pkey",
       "schema": "public",

@@ -1,4 +1,4 @@
-import type { TranscriptSegment, DiarizationTurn } from './types.ts';
+import type { TranscriptSegment, DiarizationTurn } from "./types.ts";
 
 export interface AlignedSegment {
   text: string;
@@ -20,7 +20,10 @@ export function alignTranscriptWithSpeakers(
     const wordGroups = groupWordsBySpeaker(seg.words, diarizationTurns);
 
     for (const group of wordGroups) {
-      const text = group.words.map(w => w.text).join('').trim();
+      const text = group.words
+        .map((w) => w.text)
+        .join("")
+        .trim();
       if (!text) continue;
       aligned.push({
         text,
@@ -35,10 +38,11 @@ export function alignTranscriptWithSpeakers(
 }
 
 function groupWordsBySpeaker(
-  words: TranscriptSegment['words'],
+  words: TranscriptSegment["words"],
   turns: DiarizationTurn[],
-): Array<{ speaker: number; words: TranscriptSegment['words'] }> {
-  const groups: Array<{ speaker: number; words: TranscriptSegment['words'] }> = [];
+): Array<{ speaker: number; words: TranscriptSegment["words"] }> {
+  const groups: Array<{ speaker: number; words: TranscriptSegment["words"] }> =
+    [];
 
   for (const word of words) {
     const midpoint = (word.start + word.end) / 2;
@@ -63,8 +67,14 @@ function speakerAt(time: number, turns: DiarizationTurn[]): number {
   let nearest = turns[0];
   let minDist = Infinity;
   for (const turn of turns) {
-    const dist = Math.min(Math.abs(time - turn.start), Math.abs(time - turn.end));
-    if (dist < minDist) { minDist = dist; nearest = turn; }
+    const dist = Math.min(
+      Math.abs(time - turn.start),
+      Math.abs(time - turn.end),
+    );
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = turn;
+    }
   }
   return nearest?.speaker ?? 0;
 }

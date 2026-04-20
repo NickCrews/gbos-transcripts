@@ -1,6 +1,6 @@
-import { execSync } from 'node:child_process';
-import { join } from 'node:path';
-import type { DiarizationTurn } from './types.ts';
+import { execSync } from "node:child_process";
+import { join } from "node:path";
+import type { DiarizationTurn } from "./types.ts";
 
 // Four-stage pipeline following OpenWhispr's local diarization architecture:
 //   1. Silero VAD     — filter silence before expensive stages (~2MB model)
@@ -11,7 +11,7 @@ import type { DiarizationTurn } from './types.ts';
 // sherpa-onnx runs natively via Node.js bindings — no Python, no GPU required.
 // Processing: ~30s for a 45-min meeting on M1 Mac.
 
-const MODELS_DIR = new URL('../../models', import.meta.url).pathname;
+const MODELS_DIR = new URL("../../models", import.meta.url).pathname;
 const SAMPLE_RATE = 16000;
 const MIN_SEGMENT_SECS = 0.8; // below this, CAM++ embeddings are unreliable
 const EMBEDDING_DIM = 512;
@@ -21,18 +21,26 @@ export interface DiarizationResult {
   speakerEmbeddings: Map<number, Float32Array>; // local speaker id → 512-dim CAM++ fingerprint
 }
 
-export async function diarizeAudio(audioPath: string): Promise<DiarizationResult> {
-  const sherpa = await import('sherpa-onnx');
+export async function diarizeAudio(
+  audioPath: string,
+): Promise<DiarizationResult> {
+  const sherpa = await import("sherpa-onnx");
 
   // Stages 1–4: VAD → segmentation → embedding → clustering (all within OfflineSpeakerDiarization)
   const sd = new sherpa.OfflineSpeakerDiarization({
     segmentation: {
       pyannote: {
-        model: join(MODELS_DIR, 'sherpa-onnx-pyannote-segmentation-3-0/model.onnx'),
+        model: join(
+          MODELS_DIR,
+          "sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
+        ),
       },
     },
     embedding: {
-      model: join(MODELS_DIR, '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx'),
+      model: join(
+        MODELS_DIR,
+        "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx",
+      ),
       numThreads: 1,
     },
     clustering: {
@@ -61,7 +69,10 @@ export async function diarizeAudio(audioPath: string): Promise<DiarizationResult
 
   // Extract per-speaker voice fingerprints via CAM++ (512-dim, mean-pooled over segments)
   const extractor = new sherpa.SpeakerEmbeddingExtractor({
-    model: join(MODELS_DIR, '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx'),
+    model: join(
+      MODELS_DIR,
+      "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx",
+    ),
     numThreads: 1,
   });
 

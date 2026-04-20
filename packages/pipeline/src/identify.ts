@@ -1,6 +1,6 @@
-import pgvector from 'pgvector';
-import { sql } from './db.ts';
-import type { DiarizationTurn } from './types.ts';
+import pgvector from "pgvector";
+import { sql } from "./db.ts";
+import type { DiarizationTurn } from "./types.ts";
 
 // Confidence tiers from OpenWhispr's matching system:
 //   ≥ 0.70 cosine similarity → auto-confirm
@@ -10,7 +10,12 @@ const MATCH_THRESHOLD = 0.55;
 
 export async function identifyAndInsertSegments(
   meetingId: number,
-  alignedSegments: Array<{ text: string; start: number; end: number; speaker: number }>,
+  alignedSegments: Array<{
+    text: string;
+    start: number;
+    end: number;
+    speaker: number;
+  }>,
   speakerEmbeddings: Map<number, Float32Array>,
 ): Promise<void> {
   // Resolve each local speaker index to a DB person

@@ -15,16 +15,16 @@ The data model is designed to be **municipality-agnostic** so additional governm
 
 ## Tech Stack
 
-| Component | Choice | Why |
-|---|---|---|
-| Download | `yt-dlp` (CLI) | Best YouTube downloader, audio-only extraction |
-| Transcription | `@xenova/transformers` (`Xenova/whisper-large-v3`) | Whisper via ONNX in Node.js, word-level timestamps, no Python |
-| Diarization | `sherpa-onnx` | Native ONNX bindings, no Python/GPU, ~30s for 45-min meeting on M1 |
-| Speaker embeddings | CAM++ via sherpa-onnx (512-dim) | Half the params of ECAPA-TDNN, lower EER, fast CPU inference, ONNX export |
-| Text embeddings | `@xenova/transformers` (`Xenova/all-MiniLM-L6-v2`, 384-dim) | Same model as sentence-transformers, runs in Node.js via ONNX |
-| Database | Postgres + pgvector + Drizzle ORM | |
-| Pipeline | TypeScript + Node.js via `tsx`/`pnpm` | Unified stack — no Python sidecar, no runtime boundary |
-| Web App | SolidJS + TanStack Start + TanStack Router | SSR-capable frontend with file-based routing, server functions |
+| Component          | Choice                                                      | Why                                                                       |
+| ------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Download           | `yt-dlp` (CLI)                                              | Best YouTube downloader, audio-only extraction                            |
+| Transcription      | `@xenova/transformers` (`Xenova/whisper-large-v3`)          | Whisper via ONNX in Node.js, word-level timestamps, no Python             |
+| Diarization        | `sherpa-onnx`                                               | Native ONNX bindings, no Python/GPU, ~30s for 45-min meeting on M1        |
+| Speaker embeddings | CAM++ via sherpa-onnx (512-dim)                             | Half the params of ECAPA-TDNN, lower EER, fast CPU inference, ONNX export |
+| Text embeddings    | `@xenova/transformers` (`Xenova/all-MiniLM-L6-v2`, 384-dim) | Same model as sentence-transformers, runs in Node.js via ONNX             |
+| Database           | Postgres + pgvector + Drizzle ORM                           |                                                                           |
+| Pipeline           | TypeScript + Node.js via `tsx`/`pnpm`                       | Unified stack — no Python sidecar, no runtime boundary                    |
+| Web App            | SolidJS + TanStack Start + TanStack Router                  | SSR-capable frontend with file-based routing, server functions            |
 
 **No Python required.** All ML runs through ONNX models loaded either by `sherpa-onnx` (diarization) or `@xenova/transformers` (transcription, text embedding). The only native dependency is `ffmpeg` for audio decoding.
 
@@ -57,12 +57,14 @@ Instead of anonymous `SPEAKER_00` labels per meeting, we maintain a persistent s
 1. **Diarization** (`pipeline/src/diarize.ts`): sherpa-onnx produces speaker turns + CAM++ 512-dim embeddings per speaker (mean-pooled over their segments).
 
 2. **Identify** (`pipeline/src/identify.ts`): For each speaker embedding, query `people` by cosine distance:
+
    ```sql
    SELECT id FROM people
    WHERE voice_embedding <=> $vec::vector < 0.45  -- similarity > 0.55
    ORDER BY voice_embedding <=> $vec::vector
    LIMIT 1
    ```
+
    Confidence tiers (matching OpenWhispr):
    - **≥ 0.70 similarity**: auto-confirm
    - **0.55–0.70**: suggest (auto-confirm for now, can add UX prompt later)
@@ -229,6 +231,7 @@ pipeline/src/__tests__/
 ### Integration Test (end-to-end)
 
 One integration test that runs the full pipeline on a short (~5 min) audio sample using real models:
+
 1. Transcribe with `@xenova/transformers` Whisper
 2. Diarize with sherpa-onnx
 3. Align + identify speakers

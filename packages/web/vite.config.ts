@@ -1,7 +1,7 @@
-import { defineConfig } from 'vite'
-import { tanstackStart } from '@tanstack/solid-start/plugin/vite'
-import solidPlugin from 'vite-plugin-solid'
-import path from 'node:path'
+import { defineConfig } from "vite";
+import { tanstackStart } from "@tanstack/solid-start/plugin/vite";
+import solidPlugin from "vite-plugin-solid";
+import path from "node:path";
 
 export default defineConfig({
   server: {
@@ -9,11 +9,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '~': path.resolve(import.meta.dirname, 'src'),
+      "~": path.resolve(import.meta.dirname, "src"),
     },
   },
-  plugins: [
-    tanstackStart(),
-    solidPlugin({ ssr: true }),
-  ],
-})
+  plugins: [tanstackStart(), solidPlugin({ ssr: true })],
+});
