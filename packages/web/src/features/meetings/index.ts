@@ -1,5 +1,4 @@
-import { db } from "~/db";
-import { meetingsTable } from "~/db/schema";
+import { db, meetingsTable } from "@gbos/db";
 
 export function getAllMeetings() {
   return db.select().from(meetingsTable);

@@ -11,7 +11,7 @@ import type { DiarizationTurn } from "./types.ts";
 // sherpa-onnx runs natively via Node.js bindings — no Python, no GPU required.
 // Processing: ~30s for a 45-min meeting on M1 Mac.
 
-const MODELS_DIR = new URL("../../models", import.meta.url).pathname;
+const MODELS_DIR = new URL("../models", import.meta.url).pathname;
 const SAMPLE_RATE = 16000;
 const MIN_SEGMENT_SECS = 0.8; // below this, CAM++ embeddings are unreliable
 const EMBEDDING_DIM = 512;
