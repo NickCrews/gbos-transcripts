@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "format": "prettier --experimental-cli --ignore-unknown '**/*' --write",
+    "format:check": "prettier --experimental-cli --ignore-unknown '**/*' --check",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run test"
   },
   "devDependencies": {
     "@types/node": "^22",
