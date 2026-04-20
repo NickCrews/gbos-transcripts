@@ -8,9 +8,7 @@ const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 const CHANNEL_URL = "https://www.youtube.com/channel/UCOUlNInprZEjhbpVPiJOlEA";
 const CHANNEL_ID = "UCOUlNInprZEjhbpVPiJOlEA";
 
-export async function discoverAndDownload(): Promise<void> {
-  mkdirSync(AUDIO_DIR, { recursive: true });
-
+export async function discoverNewVideos(): Promise<void> {
   const raw = execSync(`yt-dlp --flat-playlist -J "${CHANNEL_URL}"`, {
     maxBuffer: 10 * 1024 * 1024,
   }).toString();
@@ -34,29 +32,33 @@ export async function discoverAndDownload(): Promise<void> {
       .limit(1);
     if (existing) continue;
 
-    const audioPath = join(AUDIO_DIR, `${youtubeId}.wav`);
-    if (!existsSync(audioPath)) {
-      execFileSync("yt-dlp", [
-        "-x",
-        "--audio-format",
-        "wav",
-        "--audio-quality",
-        "0",
-        "-o",
-        audioPath,
-        `https://www.youtube.com/watch?v=${youtubeId}`,
-      ]);
-    }
-
     await db.insert(meetingsTable).values({
       municipality_id: municipality.id,
       youtube_id: youtubeId,
       title,
-      status: "downloaded",
+      status: "discovered",
     });
 
-    console.log(`Downloaded: ${title} (${youtubeId})`);
+    console.log(`Discovered: ${title} (${youtubeId})`);
   }
+}
+
+export function downloadAudio(youtubeId: string): string {
+  mkdirSync(AUDIO_DIR, { recursive: true });
+  const audioPath = join(AUDIO_DIR, `${youtubeId}.wav`);
+  if (!existsSync(audioPath)) {
+    execFileSync("yt-dlp", [
+      "-x",
+      "--audio-format",
+      "wav",
+      "--audio-quality",
+      "0",
+      "-o",
+      audioPath,
+      `https://www.youtube.com/watch?v=${youtubeId}`,
+    ]);
+  }
+  return audioPath;
 }
 
 async function getOrCreateMunicipality(): Promise<{ id: number }> {

@@ -1,12 +1,12 @@
 import { join } from "node:path";
 import { eq, inArray } from "drizzle-orm";
 import { client, db, meetingsTable } from "@gbos/db";
-import { discoverAndDownload } from "./download.ts";
-import { transcribeAudio } from "./transcribe.ts";
-import { diarizeAudio } from "./diarize.ts";
-import { alignTranscriptWithSpeakers } from "./align.ts";
-import { identifyAndInsertSegments } from "./identify.ts";
-import { embedSegments } from "./embed.ts";
+import { discoverNewVideos, downloadAudio } from "./download";
+import { transcribeAudio } from "./transcribe";
+import { diarizeAudio } from "./diarize";
+import { alignTranscriptWithSpeakers } from "./align";
+import { identifyAndInsertSegments } from "./identify";
+import { embedSegments } from "./embed";
 import type { DiarizationTurn, TranscriptSegment } from "./types.ts";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
@@ -14,10 +14,10 @@ const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 async function run() {
   console.log("=== GBOS Pipeline ===");
 
-  // Stage 1: discover new videos and download audio
-  await discoverAndDownload();
+  // Stage 1: discover new videos
+  await discoverNewVideos();
 
-  // Stages 2–5: process each downloaded-but-not-yet-embedded meeting
+  // Stages 2–6: process each meeting
   const pending = await db
     .select({
       id: meetingsTable.id,
@@ -27,6 +27,7 @@ async function run() {
     .from(meetingsTable)
     .where(
       inArray(meetingsTable.status, [
+        "discovered",
         "downloaded",
         "transcribed",
         "diarized",
@@ -45,6 +46,16 @@ async function run() {
       // Carry diarization output across stages within this run so we don't
       // have to redo the work to recover speaker embeddings.
       let speakerEmbeddings: Map<number, Float32Array> | undefined;
+
+      if (meeting.status === "discovered") {
+        console.log("  Downloading...");
+        downloadAudio(meeting.youtube_id);
+        await db
+          .update(meetingsTable)
+          .set({ status: "downloaded" })
+          .where(eq(meetingsTable.id, meeting.id));
+        meeting.status = "downloaded";
+      }
 
       if (meeting.status === "downloaded") {
         console.log("  Transcribing...");
