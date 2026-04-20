@@ -23,9 +23,10 @@ export async function addNewVideos(db: DB) {
     title: entry.title ?? `Untitled video ${entry.id}`,
     status: "discovered" as const,
   }));
-  await db.insert(meetingsTable).values(dbMeetings).onConflictDoNothing({
+  const insertedMeetings = await db.insert(meetingsTable).values(dbMeetings).onConflictDoNothing({
     target: meetingsTable.youtube_id,
-  });
+  }).returning();
+  return insertedMeetings;
 }
 
 export async function getMeetingTodos(db: DB) {
