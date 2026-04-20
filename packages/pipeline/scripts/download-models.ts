@@ -12,7 +12,7 @@ import { join } from "node:path";
 const MODELS_DIR = new URL("../models", import.meta.url).pathname;
 mkdirSync(MODELS_DIR, { recursive: true });
 
-const models = [
+const models: Array<{ name: string; url: string; single_file?: boolean }> = [
   {
     name: "sherpa-onnx-pyannote-segmentation-3-0",
     url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
@@ -30,7 +30,7 @@ const models = [
 
 for (const model of models) {
   console.log(`Downloading ${model.name}...`);
-  if ((model as any).single_file) {
+  if (model.single_file) {
     execSync(
       `curl -L -o "${join(MODELS_DIR, model.name + ".onnx")}" "${model.url}"`,
       { stdio: "inherit" },

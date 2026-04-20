@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { TranscriptSegment } from "./types.ts";
 
 // Whisper via ONNX — no Python required
