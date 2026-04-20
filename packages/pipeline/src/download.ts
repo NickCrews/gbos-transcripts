@@ -14,14 +14,16 @@ export async function discoverAndDownload(): Promise<void> {
   const raw = execSync(`yt-dlp --flat-playlist -J "${CHANNEL_URL}"`, {
     maxBuffer: 10 * 1024 * 1024,
   }).toString();
-  const playlist = JSON.parse(raw);
+  const playlist = JSON.parse(raw) as {
+    entries: Array<{
+      id: string;
+      title?: string;
+    }>;
+  };
 
   const municipality = await getOrCreateMunicipality();
 
-  for (const entry of playlist.entries as Array<{
-    id: string;
-    title?: string;
-  }>) {
+  for (const entry of playlist.entries) {
     const youtubeId = entry.id;
     const title = entry.title ?? "";
 
