@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { eq, inArray } from "drizzle-orm";
-import { client, db, meetingsTable } from "@gbos/core/db";
+import { getDb, meetingsTable } from "@gbos/core/db";
 import { getOrCreateGbos } from "@gbos/core/munis";
 import { downloadVideoAudio } from "@gbos/core/youtube";
 import { discoverNewVideos } from "./download";
@@ -9,12 +9,15 @@ import { diarizeAudio } from "./diarize";
 import { alignTranscriptWithSpeakers } from "./align";
 import { identifyAndInsertSegments } from "./identify";
 import { embedSegments } from "./embed";
-import type { DiarizationTurn, TranscriptSegment } from "./types.ts";
+import type { DiarizationTurn, TranscriptSegment } from "./types";
+import { loadEnv } from "./env";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 
 async function run() {
   console.log("=== GBOS Pipeline ===");
+  const env = loadEnv();
+  const { db, client } = getDb(env.DATABASE_URL);
 
   const muni = await getOrCreateGbos(db);
 

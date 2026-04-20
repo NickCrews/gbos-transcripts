@@ -1,10 +1,10 @@
-import { db, meetingsTable } from "@gbos/core/db";
+import { type DB, meetingsTable } from "@gbos/core/db";
 
-export function getAllMeetings() {
+export function getAllMeetings(db: DB) {
   return db.select().from(meetingsTable);
 }
 
-export function getMeetingById(meetingId: number) {
+export function getMeetingById(db: DB, meetingId: number) {
   return db.query.meetingsTable
     .findFirst({
       where: { id: meetingId },
