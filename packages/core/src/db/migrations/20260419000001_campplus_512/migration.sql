@@ -7,11 +7,14 @@ DROP INDEX IF EXISTS "idx_voice_embedding_l2";
 ALTER TABLE "people" DROP COLUMN "voice_embedding";
 
 --> statement-breakpoint
-ALTER TABLE "people" ADD COLUMN "voice_embedding" vector(512) NOT NULL DEFAULT '[0]';
+-- Add the new 512-dim column. We can't use a NOT NULL DEFAULT here because
+-- pgvector validates that the default literal matches the declared dimension,
+-- so add nullable, then assert NOT NULL once the column exists. Existing rows
+-- were dropped above, so there's nothing to backfill.
+ALTER TABLE "people" ADD COLUMN "voice_embedding" vector(512);
 
 --> statement-breakpoint
--- Remove the placeholder default now that the column exists
-ALTER TABLE "people" ALTER COLUMN "voice_embedding" DROP DEFAULT;
+ALTER TABLE "people" ALTER COLUMN "voice_embedding" SET NOT NULL;
 
 --> statement-breakpoint
 CREATE INDEX "idx_voice_embedding_l2" ON "people" USING hnsw ("voice_embedding" vector_l2_ops);
