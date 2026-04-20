@@ -8,7 +8,7 @@ const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 const CHANNEL_URL = "https://www.youtube.com/channel/UCOUlNInprZEjhbpVPiJOlEA";
 const CHANNEL_ID = "UCOUlNInprZEjhbpVPiJOlEA";
 
-export async function discoverNewVideos(): Promise<void> {
+export async function discoverNewVideos() {
   const raw = execSync(`yt-dlp --flat-playlist -J "${CHANNEL_URL}"`, {
     maxBuffer: 10 * 1024 * 1024,
   }).toString();
@@ -43,7 +43,7 @@ export async function discoverNewVideos(): Promise<void> {
   }
 }
 
-export function downloadAudio(youtubeId: string): string {
+export function downloadAudio(youtubeId: string) {
   mkdirSync(AUDIO_DIR, { recursive: true });
   const audioPath = join(AUDIO_DIR, `${youtubeId}.wav`);
   if (!existsSync(audioPath)) {
@@ -61,7 +61,7 @@ export function downloadAudio(youtubeId: string): string {
   return audioPath;
 }
 
-async function getOrCreateMunicipality(): Promise<{ id: number }> {
+async function getOrCreateMunicipality() {
   const [existing] = await db
     .select({ id: municipalitiesTable.id })
     .from(municipalitiesTable)
