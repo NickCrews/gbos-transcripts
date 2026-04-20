@@ -16,11 +16,3 @@ export interface DiarizationTurn {
   end: number;
   speaker: number;
 }
-
-export interface AlignedSegment {
-  text: string;
-  start: number;
-  end: number;
-  speakerLocalId: number;
-  personId: number | null;
-}
