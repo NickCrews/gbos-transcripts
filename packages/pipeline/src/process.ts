@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { eq, inArray } from "drizzle-orm";
-import { getDb, meetingsTable } from "@gbos/core/db";
+import { type DB, getDb, meetingsTable, MeetingStatus } from "@gbos/core/db";
 import { getOrCreateGbos } from "@gbos/core/munis";
 import { downloadVideoAudio } from "@gbos/core/youtube";
 import { discoverNewVideos } from "./download";
@@ -14,21 +14,15 @@ import { loadEnv } from "./env";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 
-async function run() {
-  console.log("=== GBOS Pipeline ===");
-  const env = loadEnv();
-  const { db, client } = getDb(env.DATABASE_URL);
-
+async function run(db: DB) {
   const muni = await getOrCreateGbos(db);
 
-  // Stage 1: discover new videos
   await discoverNewVideos({
     muni_id: muni.id,
     youtube_channel_id: muni.youtube_channel_id,
     db,
   });
 
-  // Stages 2–6: process each meeting
   const pending = await db
     .select({
       id: meetingsTable.id,
@@ -48,89 +42,98 @@ async function run() {
     .orderBy(meetingsTable.id);
 
   for (const meeting of pending) {
-    const audioPath = join(AUDIO_DIR, `${meeting.youtube_id}.wav`);
-    console.log(
-      `\nProcessing meeting ${meeting.id} (${meeting.youtube_id}) — status: ${meeting.status}`,
-    );
-
-    try {
-      // Carry diarization output across stages within this run so we don't
-      // have to redo the work to recover speaker embeddings.
-      let speakerEmbeddings: Map<number, Float32Array> | undefined;
-
-      if (meeting.status === "discovered") {
-        console.log("  Downloading...");
-        downloadVideoAudio(meeting.youtube_id, audioPath);
-        await db
-          .update(meetingsTable)
-          .set({ status: "downloaded" })
-          .where(eq(meetingsTable.id, meeting.id));
-        meeting.status = "downloaded";
-      }
-
-      if (meeting.status === "downloaded") {
-        console.log("  Transcribing...");
-        const transcript = await transcribeAudio(audioPath);
-        await db
-          .update(meetingsTable)
-          .set({ transcription: transcript, status: "transcribed" })
-          .where(eq(meetingsTable.id, meeting.id));
-        meeting.status = "transcribed";
-      }
-
-      if (meeting.status === "transcribed") {
-        console.log("  Diarizing...");
-        const result = await diarizeAudio(audioPath);
-        speakerEmbeddings = result.speakerEmbeddings;
-        await db
-          .update(meetingsTable)
-          .set({ diarization: result.turns, status: "diarized" })
-          .where(eq(meetingsTable.id, meeting.id));
-        meeting.status = "diarized";
-      }
-
-      if (meeting.status === "diarized") {
-        console.log("  Aligning and identifying speakers...");
-        const [row] = await db
-          .select({
-            transcription: meetingsTable.transcription,
-            diarization: meetingsTable.diarization,
-          })
-          .from(meetingsTable)
-          .where(eq(meetingsTable.id, meeting.id));
-        speakerEmbeddings ??= (await diarizeAudio(audioPath)).speakerEmbeddings;
-
-        const aligned = alignTranscriptWithSpeakers(
-          row!.transcription as TranscriptSegment[],
-          row!.diarization as DiarizationTurn[],
-        );
-        await identifyAndInsertSegments(db, meeting.id, aligned, speakerEmbeddings);
-        await db
-          .update(meetingsTable)
-          .set({ status: "aligned" })
-          .where(eq(meetingsTable.id, meeting.id));
-        meeting.status = "aligned";
-      }
-
-      if (meeting.status === "aligned") {
-        console.log("  Embedding segments...");
-        await embedSegments(db, meeting.id);
-        await db
-          .update(meetingsTable)
-          .set({ status: "embedded" })
-          .where(eq(meetingsTable.id, meeting.id));
-      }
-
-      console.log(`  ✓ Done: ${meeting.youtube_id}`);
-    } catch (err) {
-      console.error(`  ✗ Failed: ${err}`);
-    }
+    await stepOneMeeting(db, meeting);
   }
-
-  await client.end();
 }
 
-run().catch((err) => {
+async function stepOneMeeting(db: DB, meeting: { id: number; youtube_id: string; status: MeetingStatus }) {
+  const audioPath = join(AUDIO_DIR, `${meeting.youtube_id}.wav`);
+  console.log(
+    `\nProcessing meeting ${meeting.id} (${meeting.youtube_id}) — status: ${meeting.status}`,
+  );
+  // Carry diarization output across stages within this run so we don't
+  // have to redo the work to recover speaker embeddings.
+  let speakerEmbeddings: Map<number, Float32Array> | undefined;
+
+  if (meeting.status === "discovered") {
+    console.log("  Downloading...");
+    downloadVideoAudio(meeting.youtube_id, audioPath);
+    await db
+      .update(meetingsTable)
+      .set({ status: "downloaded" })
+      .where(eq(meetingsTable.id, meeting.id));
+    meeting.status = "downloaded";
+  }
+
+  if (meeting.status === "downloaded") {
+    console.log("  Transcribing...");
+    const transcript = await transcribeAudio(audioPath);
+    await db
+      .update(meetingsTable)
+      .set({ transcription: transcript, status: "transcribed" })
+      .where(eq(meetingsTable.id, meeting.id));
+    meeting.status = "transcribed";
+  }
+
+  if (meeting.status === "transcribed") {
+    console.log("  Diarizing...");
+    const result = await diarizeAudio(audioPath);
+    speakerEmbeddings = result.speakerEmbeddings;
+    await db
+      .update(meetingsTable)
+      .set({ diarization: result.turns, status: "diarized" })
+      .where(eq(meetingsTable.id, meeting.id));
+    meeting.status = "diarized";
+  }
+
+  if (meeting.status === "diarized") {
+    console.log("  Aligning and identifying speakers...");
+    const [row] = await db
+      .select({
+        transcription: meetingsTable.transcription,
+        diarization: meetingsTable.diarization,
+      })
+      .from(meetingsTable)
+      .where(eq(meetingsTable.id, meeting.id));
+    speakerEmbeddings ??= (await diarizeAudio(audioPath)).speakerEmbeddings;
+
+    const aligned = alignTranscriptWithSpeakers(
+      row!.transcription as TranscriptSegment[],
+      row!.diarization as DiarizationTurn[],
+    );
+    await identifyAndInsertSegments(db, meeting.id, aligned, speakerEmbeddings);
+    await db
+      .update(meetingsTable)
+      .set({ status: "aligned" })
+      .where(eq(meetingsTable.id, meeting.id));
+    meeting.status = "aligned";
+  }
+
+  if (meeting.status === "aligned") {
+    console.log("  Embedding segments...");
+    await embedSegments(db, meeting.id);
+    await db
+      .update(meetingsTable)
+      .set({ status: "embedded" })
+      .where(eq(meetingsTable.id, meeting.id));
+  }
+  console.log(`  ✓ Done: ${meeting.youtube_id}`);
+}
+
+async function main() {
+  loadEnv();
+  const { db, client } = getDb();
+  console.log("=== GBOS Pipeline ===");
+  try {
+
+    await run(db);
+    await client.end();
+  } catch (err) {
+    console.error(`  ✗ Failed: ${err}`);
+  }
+}
+
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
