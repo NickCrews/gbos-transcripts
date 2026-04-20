@@ -6,3 +6,4 @@ const client = postgres(process.env.DATABASE_URL!);
 const db = drizzle({ client, relations });
 
 export { db, client };
+export * from "./schema";

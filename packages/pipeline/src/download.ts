@@ -1,11 +1,12 @@
-import { execFileSync } from "node:child_process";
-import { execSync } from "node:child_process";
-import { mkdirSync, existsSync } from "node:fs";
+import { execFileSync, execSync } from "node:child_process";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { sql } from "./db.ts";
+import { eq } from "drizzle-orm";
+import { db, meetingsTable, municipalitiesTable } from "@gbos/db";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 const CHANNEL_URL = "https://www.youtube.com/channel/UCOUlNInprZEjhbpVPiJOlEA";
+const CHANNEL_ID = "UCOUlNInprZEjhbpVPiJOlEA";
 
 export async function discoverAndDownload(): Promise<void> {
   mkdirSync(AUDIO_DIR, { recursive: true });
@@ -15,12 +16,7 @@ export async function discoverAndDownload(): Promise<void> {
   }).toString();
   const playlist = JSON.parse(raw);
 
-  const [municipality] = await sql`
-    INSERT INTO municipalities (name, name_short, state, youtube_channel_id)
-    VALUES ('Girdwood Board of Supervisors', 'GBOS', 'AK', 'UCOUlNInprZEjhbpVPiJOlEA')
-    ON CONFLICT (youtube_channel_id) DO UPDATE SET name = EXCLUDED.name
-    RETURNING id
-  `;
+  const municipality = await getOrCreateMunicipality();
 
   for (const entry of playlist.entries as Array<{
     id: string;
@@ -29,9 +25,12 @@ export async function discoverAndDownload(): Promise<void> {
     const youtubeId = entry.id;
     const title = entry.title ?? "";
 
-    const existing =
-      await sql`SELECT id FROM meetings WHERE youtube_id = ${youtubeId}`;
-    if (existing.length > 0) continue;
+    const [existing] = await db
+      .select({ id: meetingsTable.id })
+      .from(meetingsTable)
+      .where(eq(meetingsTable.youtube_id, youtubeId))
+      .limit(1);
+    if (existing) continue;
 
     const audioPath = join(AUDIO_DIR, `${youtubeId}.wav`);
     if (!existsSync(audioPath)) {
@@ -47,12 +46,33 @@ export async function discoverAndDownload(): Promise<void> {
       ]);
     }
 
-    await sql`
-      INSERT INTO meetings (municipality_id, youtube_id, title, status)
-      VALUES (${municipality.id}, ${youtubeId}, ${title}, 'downloaded')
-      ON CONFLICT (youtube_id) DO NOTHING
-    `;
+    await db.insert(meetingsTable).values({
+      municipality_id: municipality.id,
+      youtube_id: youtubeId,
+      title,
+      status: "downloaded",
+    });
 
     console.log(`Downloaded: ${title} (${youtubeId})`);
   }
+}
+
+async function getOrCreateMunicipality(): Promise<{ id: number }> {
+  const [existing] = await db
+    .select({ id: municipalitiesTable.id })
+    .from(municipalitiesTable)
+    .where(eq(municipalitiesTable.youtube_channel_id, CHANNEL_ID))
+    .limit(1);
+  if (existing) return existing;
+
+  const [created] = await db
+    .insert(municipalitiesTable)
+    .values({
+      name: "Girdwood Board of Supervisors",
+      name_short: "GBOS",
+      state: "AK",
+      youtube_channel_id: CHANNEL_ID,
+    })
+    .returning({ id: municipalitiesTable.id });
+  return created!;
 }

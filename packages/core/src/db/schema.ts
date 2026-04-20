@@ -66,6 +66,9 @@ export const peopleTable = pgTable(
   ],
 );
 
+// all-MiniLM-L6-v2 produces 384-dim text embeddings used for semantic search.
+const N_TEXT_EMBEDDING_DIMENSIONS = 384;
+
 export const segmentsTable = pgTable("segments", {
   id: serial().primaryKey(),
   meeting_id: integer()
@@ -78,6 +81,7 @@ export const segmentsTable = pgTable("segments", {
   duration_secs: secondsInterval().generatedAlwaysAs(
     (): SQL => sql`${segmentsTable.end_secs} - ${segmentsTable.start_secs}`,
   ),
+  text_embedding: vector({ dimensions: N_TEXT_EMBEDDING_DIMENSIONS }),
   created_at: timestamp().notNull().defaultNow(),
 });
 
