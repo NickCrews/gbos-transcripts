@@ -1,5 +1,9 @@
-import "dotenv/config";
+import { config } from "dotenv";
 import { defineConfig } from "drizzle-kit";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+config({ path: join(dirname(fileURLToPath(import.meta.url)), "../../.env.local") });
 
 export default defineConfig({
   schema: "./src/db/schema.ts",
