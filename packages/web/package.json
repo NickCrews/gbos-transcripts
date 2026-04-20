@@ -7,8 +7,6 @@
     "dev": "vite dev",
     "build": "vite build",
     "start": "node .output/server/index.mjs",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
     "db:setup": "docker compose -f ../docker-compose.yml up -d --wait && pnpm db:migrate",
     "test": "vitest run"
   },
@@ -18,17 +16,12 @@
     "@tanstack/solid-start": "^1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "1.0.0-beta.21",
-    "postgres": "^3",
     "solid-js": "^1",
     "vite": "^7",
     "vite-plugin-solid": "^2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "drizzle-kit": "1.0.0-beta.21",
-    "tsx": "^4.21.0",
-    "typescript": "^5",
-    "vitest": "^3"
+    "tsx": "^4.21.0"
   }
 }

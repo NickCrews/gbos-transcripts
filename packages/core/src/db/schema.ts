@@ -10,7 +10,7 @@ import {
     vector,
     index,
 } from "drizzle-orm/pg-core";
-import { N_DIMENSIONS as N_VOICE_EMBEDDING_DIMENSIONS } from "~/features/voice_embeddings";
+import { N_DIMENSIONS as N_VOICE_EMBEDDING_DIMENSIONS } from "../voice_embeddings";
 
 const secondsInterval = () => interval({ fields: 'second', precision: 3 });
 

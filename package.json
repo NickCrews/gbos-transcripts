@@ -1,0 +1,21 @@
+{
+  "name": "root",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "node .output/server/index.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:setup": "docker compose -f ../docker-compose.yml up -d --wait && pnpm db:migrate",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}
