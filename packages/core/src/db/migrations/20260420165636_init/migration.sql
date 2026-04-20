@@ -15,6 +15,9 @@ CREATE TABLE "meetings" (
 	"description" varchar DEFAULT '' NOT NULL,
 	"start_time" timestamp,
 	"duration_secs" INTERVAL SECOND(3),
+	"status" varchar DEFAULT 'discovered' NOT NULL,
+	"transcription" jsonb,
+	"diarization" jsonb,
 	"created_at" timestamp DEFAULT NOW() NOT NULL
 );
 
@@ -40,7 +43,7 @@ CREATE TABLE "people" (
 	"id" serial PRIMARY KEY,
 	"name" varchar DEFAULT '' NOT NULL,
 	"created_at" timestamp DEFAULT NOW() NOT NULL,
-	"voice_embedding" vector(256) NOT NULL
+	"voice_embedding" vector(512) NOT NULL
 );
 
 --> statement-breakpoint
@@ -52,6 +55,7 @@ CREATE TABLE "segments" (
 	"start_secs" INTERVAL SECOND(3),
 	"end_secs" INTERVAL SECOND(3),
 	"duration_secs" INTERVAL SECOND(3) GENERATED ALWAYS AS ("segments"."end_secs" - "segments"."start_secs") STORED,
+	"text_embedding" vector(384),
 	"created_at" timestamp DEFAULT NOW() NOT NULL
 );
 
