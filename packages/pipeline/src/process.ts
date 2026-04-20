@@ -2,8 +2,7 @@ import { join } from "node:path";
 import { eq, inArray } from "drizzle-orm";
 import { type DB, getDb, meetingsTable, MeetingStatus } from "@gbos/core/db";
 import { getOrCreateGbos } from "@gbos/core/munis";
-import { downloadVideoAudio } from "@gbos/core/youtube";
-import { discoverNewVideos } from "./download";
+import { downloadVideoAudio, videosInChannel } from "@gbos/core/youtube";
 import { transcribeAudio } from "./transcribe";
 import { diarizeAudio } from "./diarize";
 import { alignTranscriptWithSpeakers } from "./align";
@@ -14,16 +13,23 @@ import { loadEnv } from "./env";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 
-async function processAllTodo(db: DB) {
+export async function addNewVideos(db: DB) {
   const muni = await getOrCreateGbos(db);
-
-  await discoverNewVideos({
-    muni_id: muni.id,
-    youtube_channel_id: muni.youtube_channel_id,
-    db,
+  const ytVideos = videosInChannel(muni.youtube_channel_id);
+  // insert any new videos we haven't seen before, so that they get processed in this run
+  const dbMeetings = ytVideos.map((entry) => ({
+    municipality_id: muni.id,
+    youtube_id: entry.id,
+    title: entry.title ?? `Untitled video ${entry.id}`,
+    status: "discovered" as const,
+  }));
+  await db.insert(meetingsTable).values(dbMeetings).onConflictDoNothing({
+    target: meetingsTable.youtube_id,
   });
+}
 
-  const pending = await db
+export async function getMeetingTodos(db: DB) {
+  const todos = await db
     .select({
       id: meetingsTable.id,
       youtube_id: meetingsTable.youtube_id,
@@ -40,13 +46,10 @@ async function processAllTodo(db: DB) {
       ]),
     )
     .orderBy(meetingsTable.id);
-
-  for (const meeting of pending) {
-    await processOneMeeting(db, meeting);
-  }
+  return todos;
 }
 
-async function processOneMeeting(db: DB, meeting: { id: number; youtube_id: string; status: MeetingStatus }) {
+export async function processOneMeeting(db: DB, meeting: { id: number; youtube_id: string; status: MeetingStatus }) {
   const audioPath = join(AUDIO_DIR, `${meeting.youtube_id}.wav`);
   console.log(
     `\nProcessing meeting ${meeting.id} (${meeting.youtube_id}) — status: ${meeting.status}`,
@@ -125,8 +128,11 @@ async function main() {
   const { db, client } = getDb();
   console.log("=== GBOS Pipeline ===");
   try {
-
-    await processAllTodo(db);
+    await addNewVideos(db);
+    const todos = await getMeetingTodos(db);
+    for (const todo of todos) {
+      await processOneMeeting(db, todo);
+    }
     await client.end();
   } catch (err) {
     console.error(`  ✗ Failed: ${err}`);
