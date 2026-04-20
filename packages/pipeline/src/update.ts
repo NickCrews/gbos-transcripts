@@ -1,12 +1,13 @@
-import "dotenv/config";
 import { join } from "node:path";
-import { sql } from "./db.ts";
+import { eq, inArray } from "drizzle-orm";
+import { client, db, meetingsTable } from "@gbos/db";
 import { discoverAndDownload } from "./download.ts";
 import { transcribeAudio } from "./transcribe.ts";
 import { diarizeAudio } from "./diarize.ts";
 import { alignTranscriptWithSpeakers } from "./align.ts";
 import { identifyAndInsertSegments } from "./identify.ts";
 import { embedSegments } from "./embed.ts";
+import type { DiarizationTurn, TranscriptSegment } from "./types.ts";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 
@@ -17,14 +18,22 @@ async function run() {
   await discoverAndDownload();
 
   // Stages 2–5: process each downloaded-but-not-yet-embedded meeting
-  const pending = await sql<
-    Array<{ id: number; youtube_id: string; status: string }>
-  >`
-    SELECT id, youtube_id, status
-    FROM meetings
-    WHERE status IN ('downloaded', 'transcribed', 'diarized', 'aligned')
-    ORDER BY id
-  `;
+  const pending = await db
+    .select({
+      id: meetingsTable.id,
+      youtube_id: meetingsTable.youtube_id,
+      status: meetingsTable.status,
+    })
+    .from(meetingsTable)
+    .where(
+      inArray(meetingsTable.status, [
+        "downloaded",
+        "transcribed",
+        "diarized",
+        "aligned",
+      ]),
+    )
+    .orderBy(meetingsTable.id);
 
   for (const meeting of pending) {
     const audioPath = join(AUDIO_DIR, `${meeting.youtube_id}.wav`);
@@ -33,63 +42,74 @@ async function run() {
     );
 
     try {
+      // Carry diarization output across stages within this run so we don't
+      // have to redo the work to recover speaker embeddings.
+      let speakerEmbeddings: Map<number, Float32Array> | undefined;
+
       if (meeting.status === "downloaded") {
         console.log("  Transcribing...");
         const transcript = await transcribeAudio(audioPath);
-        await sql`
-          UPDATE meetings SET transcription = ${JSON.stringify(transcript)}, status = 'transcribed'
-          WHERE id = ${meeting.id}
-        `;
+        await db
+          .update(meetingsTable)
+          .set({ transcription: transcript, status: "transcribed" })
+          .where(eq(meetingsTable.id, meeting.id));
         meeting.status = "transcribed";
       }
 
       if (meeting.status === "transcribed") {
         console.log("  Diarizing...");
-        const { turns, speakerEmbeddings } = await diarizeAudio(audioPath);
-        await sql`
-          UPDATE meetings SET diarization = ${JSON.stringify(turns)}, status = 'diarized'
-          WHERE id = ${meeting.id}
-        `;
+        const result = await diarizeAudio(audioPath);
+        speakerEmbeddings = result.speakerEmbeddings;
+        await db
+          .update(meetingsTable)
+          .set({ diarization: result.turns, status: "diarized" })
+          .where(eq(meetingsTable.id, meeting.id));
         meeting.status = "diarized";
-        // Store embeddings in a temp JS map for the align step below
-        (meeting as any)._turns = turns;
-        (meeting as any)._embeddings = speakerEmbeddings;
       }
 
       if (meeting.status === "diarized") {
         console.log("  Aligning and identifying speakers...");
-        const row = await sql<
-          Array<{ transcription: string; diarization: string }>
-        >`
-          SELECT transcription, diarization FROM meetings WHERE id = ${meeting.id}
-        `;
-        const transcript = JSON.parse(row[0].transcription);
-        const turns = JSON.parse(row[0].diarization);
-        // Re-diarize to get embeddings if not already in memory
-        const { speakerEmbeddings } = (meeting as any)._embeddings
-          ? { speakerEmbeddings: (meeting as any)._embeddings }
-          : await diarizeAudio(audioPath);
+        const [row] = await db
+          .select({
+            transcription: meetingsTable.transcription,
+            diarization: meetingsTable.diarization,
+          })
+          .from(meetingsTable)
+          .where(eq(meetingsTable.id, meeting.id));
+        speakerEmbeddings ??= (await diarizeAudio(audioPath)).speakerEmbeddings;
 
-        const aligned = alignTranscriptWithSpeakers(transcript, turns);
+        const aligned = alignTranscriptWithSpeakers(
+          row!.transcription as TranscriptSegment[],
+          row!.diarization as DiarizationTurn[],
+        );
         await identifyAndInsertSegments(meeting.id, aligned, speakerEmbeddings);
-        await sql`UPDATE meetings SET status = 'aligned' WHERE id = ${meeting.id}`;
+        await db
+          .update(meetingsTable)
+          .set({ status: "aligned" })
+          .where(eq(meetingsTable.id, meeting.id));
         meeting.status = "aligned";
       }
 
       if (meeting.status === "aligned") {
         console.log("  Embedding segments...");
         await embedSegments(meeting.id);
-        await sql`UPDATE meetings SET status = 'embedded' WHERE id = ${meeting.id}`;
+        await db
+          .update(meetingsTable)
+          .set({ status: "embedded" })
+          .where(eq(meetingsTable.id, meeting.id));
       }
 
       console.log(`  ✓ Done: ${meeting.youtube_id}`);
     } catch (err) {
       console.error(`  ✗ Failed: ${err}`);
-      await sql`UPDATE meetings SET status = 'error' WHERE id = ${meeting.id}`;
+      await db
+        .update(meetingsTable)
+        .set({ status: "error" })
+        .where(eq(meetingsTable.id, meeting.id));
     }
   }
 
-  await sql.end();
+  await client.end();
 }
 
 run().catch((err) => {
