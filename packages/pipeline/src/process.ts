@@ -124,10 +124,6 @@ async function run() {
       console.log(`  ✓ Done: ${meeting.youtube_id}`);
     } catch (err) {
       console.error(`  ✗ Failed: ${err}`);
-      await db
-        .update(meetingsTable)
-        .set({ status: "error" })
-        .where(eq(meetingsTable.id, meeting.id));
     }
   }
 
