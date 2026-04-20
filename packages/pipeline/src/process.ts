@@ -14,7 +14,7 @@ import { loadEnv } from "./env";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 
-async function run(db: DB) {
+async function processAllTodo(db: DB) {
   const muni = await getOrCreateGbos(db);
 
   await discoverNewVideos({
@@ -42,11 +42,11 @@ async function run(db: DB) {
     .orderBy(meetingsTable.id);
 
   for (const meeting of pending) {
-    await stepOneMeeting(db, meeting);
+    await processOneMeeting(db, meeting);
   }
 }
 
-async function stepOneMeeting(db: DB, meeting: { id: number; youtube_id: string; status: MeetingStatus }) {
+async function processOneMeeting(db: DB, meeting: { id: number; youtube_id: string; status: MeetingStatus }) {
   const audioPath = join(AUDIO_DIR, `${meeting.youtube_id}.wav`);
   console.log(
     `\nProcessing meeting ${meeting.id} (${meeting.youtube_id}) — status: ${meeting.status}`,
@@ -126,7 +126,7 @@ async function main() {
   console.log("=== GBOS Pipeline ===");
   try {
 
-    await run(db);
+    await processAllTodo(db);
     await client.end();
   } catch (err) {
     console.error(`  ✗ Failed: ${err}`);
