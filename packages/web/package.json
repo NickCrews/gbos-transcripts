@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@gbos/db": "workspace:*",
+    "@gbos/core": "workspace:*",
     "@tanstack/solid-router": "^1",
     "@tanstack/solid-start": "^1",
     "@t3-oss/env-core": "^0.13.11",

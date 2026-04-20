@@ -1,7 +1,9 @@
 import { join } from "node:path";
 import { eq, inArray } from "drizzle-orm";
-import { client, db, meetingsTable } from "@gbos/db";
-import { discoverNewVideos, downloadAudio } from "./download";
+import { client, db, meetingsTable } from "@gbos/core/db";
+import { getOrCreateGbos } from "@gbos/core/munis";
+import { downloadVideoAudio } from "@gbos/core/youtube";
+import { discoverNewVideos } from "./download";
 import { transcribeAudio } from "./transcribe";
 import { diarizeAudio } from "./diarize";
 import { alignTranscriptWithSpeakers } from "./align";
@@ -14,8 +16,14 @@ const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 async function run() {
   console.log("=== GBOS Pipeline ===");
 
+  const muni = await getOrCreateGbos(db);
+
   // Stage 1: discover new videos
-  await discoverNewVideos();
+  await discoverNewVideos({
+    muni_id: muni.id,
+    youtube_channel_id: muni.youtube_channel_id,
+    db,
+  });
 
   // Stages 2–6: process each meeting
   const pending = await db
@@ -49,7 +57,7 @@ async function run() {
 
       if (meeting.status === "discovered") {
         console.log("  Downloading...");
-        downloadAudio(meeting.youtube_id);
+        downloadVideoAudio(meeting.youtube_id, audioPath);
         await db
           .update(meetingsTable)
           .set({ status: "downloaded" })
@@ -93,7 +101,7 @@ async function run() {
           row!.transcription as TranscriptSegment[],
           row!.diarization as DiarizationTurn[],
         );
-        await identifyAndInsertSegments(meeting.id, aligned, speakerEmbeddings);
+        await identifyAndInsertSegments(db, meeting.id, aligned, speakerEmbeddings);
         await db
           .update(meetingsTable)
           .set({ status: "aligned" })
@@ -103,7 +111,7 @@ async function run() {
 
       if (meeting.status === "aligned") {
         console.log("  Embedding segments...");
-        await embedSegments(meeting.id);
+        await embedSegments(db, meeting.id);
         await db
           .update(meetingsTable)
           .set({ status: "embedded" })
