@@ -46,7 +46,7 @@ export const meetingsTable = pgTable("meetings", {
   municipality_id: integer()
     .notNull()
     .references(() => municipalitiesTable.id),
-  youtube_id: varchar().notNull().default(""),
+  youtube_id: varchar().notNull().default("").unique(),
   youtube_url: varchar().generatedAlwaysAs(
     (): SQL =>
       sql`CASE WHEN ${meetingsTable.youtube_id} != '' THEN 'https://www.youtube.com/watch?v=' || ${meetingsTable.youtube_id} ELSE '' END`,
