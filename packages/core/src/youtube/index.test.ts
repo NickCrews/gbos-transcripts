@@ -14,10 +14,10 @@ describe("YouTube Module", () => {
     it("should download video audio", () => {
         // A 10sec video for testing
         const sampleVideo = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-        const path = (new URL("./test_audio/rick.wav", import.meta.url)).pathname;
+        const path = new URL("./test_audio/rick.wav", import.meta.url).pathname;
         let result = downloadVideoAudio(sampleVideo, path, "overwrite");
         expect(result).toHaveProperty("downloaded", true);
-        let result2 = downloadVideoAudio(sampleVideo, path, "skip");
-        expect(result2).toHaveProperty("downloaded", false);
+        result = downloadVideoAudio(sampleVideo, path, "skip");
+        expect(result).toHaveProperty("downloaded", false);
     });
 });

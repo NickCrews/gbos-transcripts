@@ -36,7 +36,10 @@ export async function identifyAndInsertSegments(
   }
 }
 
-async function findOrCreatePerson(db: DB, embedding: Float32Array): Promise<number> {
+async function findOrCreatePerson(
+  db: DB,
+  embedding: Float32Array,
+): Promise<number> {
   const vec = Array.from(embedding);
   const distance = cosineDistance(peopleTable.voice_embedding, vec);
 
