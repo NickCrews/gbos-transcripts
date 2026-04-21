@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { eq, inArray } from "drizzle-orm";
-import { type DB, getDb, meetingsTable, MeetingStatus } from "@gbos/core/db";
+import { type DB, meetingsTable, MeetingStatus } from "@gbos/core/db";
 import { getOrCreateGbos } from "@gbos/core/munis";
 import { downloadVideoAudio, videosInChannel } from "@gbos/core/youtube";
 import { transcribeAudio } from "./transcribe";
@@ -9,7 +9,6 @@ import { alignTranscriptWithSpeakers } from "./align";
 import { identifyAndInsertSegments } from "./identify";
 import { embedSegments } from "./embed";
 import type { DiarizationTurn, TranscriptSegment } from "./types";
-import { loadEnv } from "./env";
 
 const AUDIO_DIR = process.env.AUDIO_DIR ?? "./data/audio";
 
@@ -23,9 +22,13 @@ export async function addNewVideos(db: DB) {
     title: entry.title ?? `Untitled video ${entry.id}`,
     status: "discovered" as const,
   }));
-  const insertedMeetings = await db.insert(meetingsTable).values(dbMeetings).onConflictDoNothing({
-    target: meetingsTable.youtube_id,
-  }).returning();
+  const insertedMeetings = await db
+    .insert(meetingsTable)
+    .values(dbMeetings)
+    .onConflictDoNothing({
+      target: meetingsTable.youtube_id,
+    })
+    .returning();
   return insertedMeetings;
 }
 
@@ -50,7 +53,10 @@ export async function getMeetingTodos(db: DB) {
   return todos;
 }
 
-export async function processOneMeeting(db: DB, meeting: { id: number; youtube_id: string; status: MeetingStatus }) {
+export async function processOneMeeting(
+  db: DB,
+  meeting: { id: number; youtube_id: string; status: MeetingStatus },
+) {
   const audioPath = join(AUDIO_DIR, `${meeting.youtube_id}.wav`);
   console.log(
     `\nProcessing meeting ${meeting.id} (${meeting.youtube_id}) — status: ${meeting.status}`,
@@ -123,24 +129,3 @@ export async function processOneMeeting(db: DB, meeting: { id: number; youtube_i
   }
   console.log(`  ✓ Done: ${meeting.youtube_id}`);
 }
-
-async function main() {
-  loadEnv();
-  const { db, client } = getDb();
-  console.log("=== GBOS Pipeline ===");
-  try {
-    await addNewVideos(db);
-    const todos = await getMeetingTodos(db);
-    for (const todo of todos) {
-      await processOneMeeting(db, todo);
-    }
-    await client.end();
-  } catch (err) {
-    console.error(`  ✗ Failed: ${err}`);
-  }
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
