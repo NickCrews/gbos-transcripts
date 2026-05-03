@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import type { DiarizationTurn } from "./types.ts";
+import sherpa from "sherpa-onnx-node";
 
 // Four-stage pipeline following OpenWhispr's local diarization architecture:
 //   1. Silero VAD     — filter silence before expensive stages (~2MB model)
@@ -24,10 +25,9 @@ export interface DiarizationResult {
 export async function diarizeAudio(
   audioPath: string,
 ): Promise<DiarizationResult> {
-  const sherpa = await import("sherpa-onnx");
 
   // Stages 1–4: VAD → segmentation → embedding → clustering (all within OfflineSpeakerDiarization)
-  const sd = new sherpa.OfflineSpeakerDiarization({
+  const sd = sherpa.createOfflineSpeakerDiarization({
     segmentation: {
       pyannote: {
         model: join(
@@ -44,31 +44,41 @@ export async function diarizeAudio(
       numThreads: 1,
     },
     clustering: {
-      type: 1, // AgglomerativeClustering
-      agglomerativeClustering: {
-        threshold: 0.5,
-        minNumSpeakers: 0,
-        maxNumSpeakers: 20,
-      },
+      numClusters: -1,
+      threshold: 0.5,
     },
     minDurationOn: MIN_SEGMENT_SECS,
     minDurationOff: 0.5,
-    numThreads: 4,
   });
 
   const samples = loadAudioAt16kHz(audioPath);
   const sdResult = sd.process(samples);
 
-  const turns: DiarizationTurn[] = sdResult.segments.map(
+  const turns: DiarizationTurn[] = sdResult.map(
     (s: { start: number; end: number; speaker: number }) => ({
       start: s.start,
       end: s.end,
       speaker: s.speaker,
     }),
   );
+  sd.free?.();
 
   // Extract per-speaker voice fingerprints via CAM++ (512-dim, mean-pooled over segments)
-  const extractor = new sherpa.SpeakerEmbeddingExtractor({
+  const speakerEmbeddings = new Map<number, Float32Array>();
+  const ExtractorCtor = (sherpa as {
+    SpeakerEmbeddingExtractor?: new (config: { model: string; numThreads: number }) => {
+      createStream: () => {
+        acceptWaveform: (sampleRate: number, samples: Float32Array) => void;
+        inputFinished: () => void;
+      };
+      compute: (stream: unknown) => Float32Array;
+    }
+  }).SpeakerEmbeddingExtractor;
+  if (!ExtractorCtor) {
+    return { turns, speakerEmbeddings };
+  }
+
+  const extractor = new ExtractorCtor({
     model: join(
       MODELS_DIR,
       "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx",
@@ -83,7 +93,6 @@ export async function diarizeAudio(
     speakerSegments.set(turn.speaker, list);
   }
 
-  const speakerEmbeddings = new Map<number, Float32Array>();
   for (const [speakerId, segs] of speakerSegments) {
     const embeddings: Float32Array[] = [];
 
