@@ -6,6 +6,8 @@ The Girdwood Board of Supervisors (GBOS) publishes meeting recordings on [YouTub
 
 The data model is designed to be **municipality-agnostic** so additional government bodies can be added later, following the MeetingBank schema conventions where applicable.
 
+It is also designed to be **source-agnostic**. YouTube is the only ingestion source today, but Vimeo, direct uploads, and municipality-hosted streams are all plausible tomorrow. A meeting therefore has its own internal id (`meetings.id`, the integer primary key), and the YouTube video id is just one *attribute* of that meeting (its source identifier). All downstream code — pipeline stages, cache paths, function signatures, test fixtures — should key off the internal meeting id, not the YouTube id. See "Open: source abstraction" below for the planned schema follow-up.
+
 ## Prior Art Considered
 
 - **Council Data Project**: Open-source, Python+TS, closest match — but uses Google Cloud services and Firebase
