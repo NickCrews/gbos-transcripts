@@ -10,10 +10,19 @@ declare module 'sherpa-onnx-node' {
         acceptWaveform(options: WaveForm): void;
     };
 
+    export interface OfflineRecognizerResult {
+        text: string;
+        tokens?: string[];
+        timestamps?: number[];
+        lang?: string;
+        emotion?: string;
+        event?: string;
+    }
+
     export class OfflineRecognizer {
         constructor(config: unknown);
         createStream(): Stream;
         decode(stream: Stream): void;
-        getResult(stream: Stream): unknown;
+        getResult(stream: Stream): OfflineRecognizerResult;
     }
 }

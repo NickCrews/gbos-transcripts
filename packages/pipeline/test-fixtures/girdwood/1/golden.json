@@ -1,0 +1,45 @@
+{
+  "meeting_id": 1,
+  "source": { "type": "youtube", "id": "9HoIM5INxpI" },
+  "audio_sha256": "196b15118ad3e439b6468ee25fc51f621b9724e194dd43e99b2af1c28c6324dd",
+  "duration_sec": 9970,
+  "interesting_segments": [
+    {
+      "start": 60,
+      "end": 80,
+      "speaker_id": "mike-edgington",
+      "text": "Subject to the Alaska Open Meetings Act as found in Alaska Statute 44.62.310 and that includes Municipal Code 1.25 public meetings. Girdwood Board of Supervisors operates under the Girdwood Public Meeting standards of conduct. Call the meeting to order at seven o'clock. My name is Mike Edgington, Chair."
+    },
+    {
+      "start": 1843,
+      "end": 1873,
+      "speaker_id": "unknown-state-rep",
+      "text": "Well you know yes we are going to see additional revenue. The estimate is if these prices stay high through the end of June, that's the end of our fiscal year, we'll probably see about $500 million more in the state treasury. I also think about the people that are dying losing their homes and just the chaos that is happening that is allowing us to make more money.",
+      "notes": "Visiting state legislator answering a question about whether high oil prices are a silver lining for the Alaska budget."
+    },
+    {
+      "start": "1:33:57",
+      "end": "1:34:17",
+      "speaker_id": "nick-crews",
+      "text": "Hey Zach. Um I'm curious if you have any insight into the the building code changes, if how if any of those like how they would affect the cost of building new construction. Like and I'm curious in particular how that would affect Girdwood for construction"
+    },
+    {
+      "start": "1:34:17",
+      "end": "1:35:28",
+      "speaker_id": "zac-johnson",
+      "text": ""
+    },
+    {
+      "start": "1:35:31",
+      "end": "1:35:59",
+      "speaker_id": "mike-edgington",
+      "text": "Just to editorialize briefly, I think there's a weird thing about building code in Girdwood. My understanding is yes, it applies to Girdwood, but it is not enforced by the municipality in Girdwood or in Eagle River. But uh we have one of municipal attorney's on, so maybe you can uh give us some clarity on that. To put them on the spot. But uh we are not within the building services enforcement theory. So but I know some private lenders require it. So thank you"
+    },
+    {
+      "start": "2:36:14",
+      "end": "2:37:32",
+      "speaker_id": "jennifer-wingard",
+      "text": "my initial thought and then but my other thought was also I didn't want to have a lot of momentum and then have to restart all the momentum right like I don't know how much momentum there is behind rewriting the um or or sorry revising the bylaws doing the 60 day window doing the talking through certain revisions and then starting that process over again and so one of the things I mean speaking of momentum uh I thought I'd throw out there the possibility of doing another work session there is also the possibility of letting this sit somewhere let other people I mean really we we uh other people can also have their own documents uh or it's very easy to do this have your own changes that you would like to have to the bylaws and then try to and then work to combine those documents um and then there is also an argument to be made that we gather comments on this and then refinance with the new board just to get it I mean in a way that that maximizes so but it is also the new board that will be operating under them from the get go but I've really I I put the I purposely put the meeting uh before this the changeover in order to try to uh capitalize on all possible experience and all the work that's been done"
+    }
+  ]
+}

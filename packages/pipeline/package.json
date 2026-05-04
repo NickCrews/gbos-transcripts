@@ -6,6 +6,7 @@
   "scripts": {
     "download-models": "tsx scripts/download-models.ts",
     "process": "tsx src/update.ts",
+    "fixtures": "tsx scripts/fixtures.ts",
     "test": "vitest run"
   },
   "dependencies": {
