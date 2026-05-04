@@ -1,12 +1,23 @@
 import { DB, municipalitiesTable } from "../db";
-import { eq } from "drizzle-orm";
+import { eq, InferInsertModel } from "drizzle-orm";
+
+type Municipality = InferInsertModel<typeof municipalitiesTable>;
 
 export const GBOS_MUNICIPALITY = {
   name: "Girdwood Board of Supervisors",
   name_short: "GBOS",
   state: "AK",
+  // https://www.youtube.com/channel/UCOUlNInprZEjhbpVPiJOlEA
   youtube_channel_id: "UCOUlNInprZEjhbpVPiJOlEA",
-} as const;
+} as const satisfies Municipality;
+
+export const MOA_MUNICIPALITY = {
+  name: "Municipality of Anchorage",
+  name_short: "MOA",
+  state: "AK",
+  // https://www.youtube.com/channel/UCZDEuWj4IxdlwBhqrk62_XA
+  youtube_channel_id: "UCZDEuWj4IxdlwBhqrk62_XA",
+} as const satisfies Municipality;
 
 export async function getOrCreateGbos(db: DB) {
   const [existing] = await db
