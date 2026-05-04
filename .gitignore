@@ -1,5 +1,6 @@
 # Data
 data/
+.cache
 
 # Downloaded ONNX models (~45MB, fetched via pnpm download-models)
 models/
