@@ -18,7 +18,7 @@ The data model is designed to be **municipality-agnostic** so additional governm
 | Component          | Choice                                                      | Why                                                                       |
 | ------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
 | Download           | `yt-dlp` (CLI)                                              | Best YouTube downloader, audio-only extraction                            |
-| Transcription      | `@xenova/transformers` (`Xenova/whisper-large-v3`)          | Whisper via ONNX in Node.js, word-level timestamps, no Python             |
+| Transcription      | `sherpa-onnx` (NeMo Parakeet TDT 0.6b v3, INT8)             | Fast ONNX transducer ASR via native Node.js bindings, no Python           |
 | Diarization        | `sherpa-onnx`                                               | Native ONNX bindings, no Python/GPU, ~30s for 45-min meeting on M1        |
 | Speaker embeddings | CAM++ via sherpa-onnx (512-dim)                             | Half the params of ECAPA-TDNN, lower EER, fast CPU inference, ONNX export |
 | Text embeddings    | `@xenova/transformers` (`Xenova/all-MiniLM-L6-v2`, 384-dim) | Same model as sentence-transformers, runs in Node.js via ONNX             |
@@ -26,7 +26,7 @@ The data model is designed to be **municipality-agnostic** so additional governm
 | Pipeline           | TypeScript + Node.js via `tsx`/`pnpm`                       | Unified stack — no Python sidecar, no runtime boundary                    |
 | Web App            | SolidJS + TanStack Start + TanStack Router                  | SSR-capable frontend with file-based routing, server functions            |
 
-**No Python required.** All ML runs through ONNX models loaded either by `sherpa-onnx` (diarization) or `@xenova/transformers` (transcription, text embedding). The only native dependency is `ffmpeg` for audio decoding.
+**No Python required.** All ML runs through ONNX models loaded either by `sherpa-onnx` (transcription, diarization) or `@xenova/transformers` (text embedding). The only native dependency is `ffmpeg` for audio decoding.
 
 **Drizzle as source of truth**: The schema is defined in `web/src/db/schema.ts`. The pipeline connects to the same Postgres database using `postgres` (postgres-js) with raw SQL.
 
@@ -87,11 +87,11 @@ Status tracked in `meetings.status` column:
 
 1. **Discover + Download** (`download.ts`): `yt-dlp --flat-playlist` → find new videos → download audio as WAV → insert meeting row → `status='downloaded'`
 
-2. **Transcribe** (`transcribe.ts`): `@xenova/transformers` Whisper → word+segment timestamps → saved to `meetings.transcription` (JSONB) → `status='transcribed'`
+2. **Transcribe** (`transcribe.ts`): `sherpa-onnx` NeMo Parakeet TDT 0.6b v3 (INT8) → segment-level transcription → saved to `meetings.transcription` (JSONB) → `status='transcribed'`
 
 3. **Diarize** (`diarize.ts`): sherpa-onnx four-stage pipeline → speaker turns + CAM++ embeddings → saved to `meetings.diarization` (JSONB) → `status='diarized'`
 
-4. **Align + Identify** (`align.ts` + `identify.ts`): merge Whisper segments with speaker turns by word-level timestamps → match embeddings against `people` → insert segments with `person_id` → `status='aligned'`
+4. **Align + Identify** (`align.ts` + `identify.ts`): merge Parakeet transcript segments with speaker turns by timestamps → match embeddings against `people` → insert segments with `person_id` → `status='aligned'`
 
 5. **Embed** (`embed.ts`): `@xenova/transformers` `all-MiniLM-L6-v2` → 384-dim text vectors → stored in `segments.text_embedding` → `status='embedded'`
 
@@ -105,12 +105,12 @@ Status tracked in `meetings.status` column:
 0 3 * * * cd /path/to/gbos-transcripts/pipeline && pnpm update
 ```
 
-GBOS publishes ~2-4 meetings/month. Most runs find nothing new. New meeting processing: download (~5 min), transcribe (Whisper, varies by length), diarize (~30s for 45-min on M1), align+identify (~seconds), embed (~seconds).
+GBOS publishes ~2-4 meetings/month. Most runs find nothing new. New meeting processing: download (~5 min), transcribe (Parakeet TDT 0.6b v3, varies by length), diarize (~30s for 45-min on M1), align+identify (~seconds), embed (~seconds).
 
 ## Build Phases
 
 1. **Foundation**: Init pipeline pnpm project, implement `db.ts`, `download.ts`, test with 1 short meeting
-2. **Transcription + Diarization**: Implement `transcribe.ts` (`@xenova/transformers` Whisper), `diarize.ts` (sherpa-onnx), `align.ts`. Download models (`pnpm download-models`). Test end-to-end on 2-3 meetings.
+2. **Transcription + Diarization**: Implement `transcribe.ts` (`sherpa-onnx` NeMo Parakeet TDT 0.6b v3), `diarize.ts` (sherpa-onnx), `align.ts`. Download models (`pnpm download-models`). Test end-to-end on 2-3 meetings.
 3. **Speaker Matching**: Implement `identify.ts`, verify speakers are linked across meetings
 4. **Embeddings**: Implement `embed.ts` + add `text_embedding` column to segments
 5. **Web App Foundation**: Build basic SolidJS + TanStack Start site with DB connectivity
@@ -133,20 +133,24 @@ GBOS publishes ~2-4 meetings/month. Most runs find nothing new. New meeting proc
 
 ```
 # pipeline/package.json
-sherpa-onnx              # Native ONNX bindings: VAD + pyannote segmentation + CAM++ + clustering
-@xenova/transformers     # Whisper transcription + all-MiniLM-L6-v2 text embedding (ONNX in Node)
-postgres                 # postgres-js driver
-pgvector                 # Vector serialization helpers for postgres-js
+sherpa-onnx-node         # Native ONNX bindings: Parakeet ASR + VAD + pyannote segmentation + CAM++ + clustering
+@xenova/transformers     # all-MiniLM-L6-v2 text embedding (ONNX in Node)
+@gbos/core               # Shared schema + db client (postgres-js, pgvector, drizzle-orm)
+drizzle-orm              # Type-safe ORM (used directly for some queries)
+@t3-oss/env-core         # Typed env var loading
 dotenv                   # Environment variable loading
 
 # External binaries (must be installed separately)
 yt-dlp                   # YouTube download
 ffmpeg                   # Audio decoding to 16kHz PCM (used by diarize.ts)
 
-# pipeline/models/  (~45MB, downloaded via `pnpm download-models`, gitignored)
+# pipeline/models/  (gitignored)
+# Diarization models (~45MB, downloaded via `pnpm download-models`):
 sherpa-onnx-pyannote-segmentation-3-0/model.onnx          # ~6.6MB
 3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx  # ~28MB
 silero_vad.onnx                                            # ~2MB
+# Transcription model (downloaded lazily on first run by transcribe.ts):
+sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/               # NeMo Parakeet TDT 0.6b v3 INT8
 
 # web/package.json
 drizzle-orm              # Type-safe ORM + query builder
@@ -207,7 +211,7 @@ web/src/__tests__/
 ```
 pipeline/src/__tests__/
 ├── fixtures/
-│   ├── sample_transcript.json    # Pre-recorded @xenova/transformers Whisper output
+│   ├── sample_transcript.json    # Pre-recorded sherpa-onnx Parakeet ASR output
 │   ├── sample_diarization.json   # Pre-recorded sherpa-onnx diarization output
 │   └── sample_embeddings.json    # Pre-computed 512-dim CAM++ voice embeddings
 ├── align.test.ts             # Transcript + speaker turn merging (pure logic, no models)
@@ -232,7 +236,7 @@ pipeline/src/__tests__/
 
 One integration test that runs the full pipeline on a short (~5 min) audio sample using real models:
 
-1. Transcribe with `@xenova/transformers` Whisper
+1. Transcribe with `sherpa-onnx` NeMo Parakeet TDT 0.6b v3
 2. Diarize with sherpa-onnx
 3. Align + identify speakers
 4. Embed text
