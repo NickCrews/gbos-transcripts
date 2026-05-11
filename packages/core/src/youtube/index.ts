@@ -47,12 +47,11 @@ export function downloadVideoAudio(
         console.log(`Downloading audio for ${url} to ${path}...`);
         execFileSync("yt-dlp", [
             "-x",
-            "--audio-format",
-            "wav",
-            "--audio-quality",
-            "0",
-            "-o",
-            path,
+            "--audio-format", "wav",
+            // the trancription model wants 16kHz audio with one channel
+            "--postprocessor-args", "-ar 16000 -ac 1",
+            "--audio-quality", "0",
+            "-o", path,
             url,
         ]);
         return { downloaded: true };
