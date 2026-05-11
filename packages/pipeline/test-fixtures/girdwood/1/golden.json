@@ -1,6 +1,9 @@
 {
   "meeting_id": 1,
-  "source": { "type": "youtube", "id": "9HoIM5INxpI" },
+  "source": {
+    "type": "youtube",
+    "id": "9HoIM5INxpI"
+  },
   "audio_sha256": "196b15118ad3e439b6468ee25fc51f621b9724e194dd43e99b2af1c28c6324dd",
   "duration_sec": 9970,
   "interesting_segments": [
@@ -11,11 +14,10 @@
       "text": "Subject to the Alaska Open Meetings Act as found in Alaska Statute 44.62.310 and that includes Municipal Code 1.25 public meetings. Girdwood Board of Supervisors operates under the Girdwood Public Meeting standards of conduct. Call the meeting to order at seven o'clock. My name is Mike Edgington, Chair."
     },
     {
-      "start": 1843,
-      "end": 1873,
-      "speaker_id": "unknown-state-rep",
-      "text": "Well you know yes we are going to see additional revenue. The estimate is if these prices stay high through the end of June, that's the end of our fiscal year, we'll probably see about $500 million more in the state treasury. I also think about the people that are dying losing their homes and just the chaos that is happening that is allowing us to make more money.",
-      "notes": "Visiting state legislator answering a question about whether high oil prices are a silver lining for the Alaska budget."
+      "start": "30:43",
+      "end": "31:14",
+      "speaker_id": "cathy-giessel",
+      "text": "Well you know yes we are going to see additional revenue. The estimate is if these prices stay high through the end of June, that's the end of our fiscal year, we'll probably see about $500 million more in the state treasury. I also think about the people that are dying losing their homes and just the chaos that is happening that is allowing us to make more money."
     },
     {
       "start": "1:33:57",
@@ -24,10 +26,10 @@
       "text": "Hey Zach. Um I'm curious if you have any insight into the the building code changes, if how if any of those like how they would affect the cost of building new construction. Like and I'm curious in particular how that would affect Girdwood for construction"
     },
     {
-      "start": "1:34:17",
+      "start": "1:34:15",
       "end": "1:35:28",
       "speaker_id": "zac-johnson",
-      "text": ""
+      "text": "Well, title 23, you know, applies to Girdwood's same as Anchorage, unless I there's something I'm not aware of there. But the intent is generally like I said it's twofold. One, it is just an update of the code. There, there are international standards or national standards uh that are put out on a regular basis, and generally we we bring our code into conformity with those, and that's just kind of part of the regular update cycle. The other piece of it is trying to make it easier um and more affordable to to build housing, right? So trying to identify costs that are not necessary to making a structure um safe or habitable, um and and reducing some of those. And and to be honest, a lot of it gets kind of wonky. I mean, one that the builders have been talking to us um asking for years that we're finally seeing adopted in this is that it used to be for glue lams uh for porches or exterior structures, they had to be pressure treated. Uh that was a major concern. So now we're saying that you can simply uh treat them on site and flash them, right? So a lot of it gets um a little in the weeds, but you know, generally I I think the feedback on it has been positive, and again, it was a collaborative effort involving the the planning department and also folks uh from the building community to to work on it. Thanks. Thanks just to editorialized briefly, I think there's a weird thing about building code in Goodwood, my understanding is Yes, it applies to Goodwood, but it is not enforced by the municipality in Girdwood or Nickel River."
     },
     {
       "start": "1:35:31",
