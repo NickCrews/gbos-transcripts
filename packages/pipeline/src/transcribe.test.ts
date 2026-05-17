@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { type WaveForm } from "sherpa-onnx-node";
-import { getRecognizer, transcribeSamples } from "./transcribe";
+import { ensureModelFiles, transcribeSamples, transcribeAudio, getRecognizer } from "./transcribe";
 import { loadAllFixtures, type MeetingFixture } from "./test-utils/fixtures";
 import { getCachedAudioForFixture, isCached } from "./test-utils/audio-cache";
 import { computeWER } from "./test-utils/wer";
@@ -23,6 +23,40 @@ const fixtures = loadAllFixtures();
 const curatedFixtures = fixtures
   .filter((f) => f.segments.some((s) => s._curated))
   .filter((f) => isCached(f.meeting.youtube_id));
+
+describe("transcribe — smoke test", () => {
+  it("transcribes a 4 second audio sample", async () => {
+    const modelFiles = ensureModelFiles();
+    const result = await transcribeAudio(modelFiles.testWav, 16000);
+    expect(result.length).toBe(1);
+    const firstSegment = result[0]!;
+
+    expect(firstSegment.text).toMatchInlineSnapshot(
+      `"Ask not what your country can do for you, ask what you can do for your country."`,
+    );
+    expect(firstSegment.words.map((w) => w.text)).toEqual([
+      "Ask", "not", "what", "your", "country", "can", "do", "for", "you,",
+      "ask", "what", "you", "can", "do", "for", "your", "country.",
+    ]);
+
+    // Segment timing: starts at/near 0, ends within a plausible window.
+    expect(firstSegment.start).toBeGreaterThanOrEqual(0);
+    expect(firstSegment.end).toBeGreaterThan(firstSegment.start);
+    expect(firstSegment.end).toBeLessThan(5);
+
+    // Word timings are monotonic, non-overlapping, and fall inside the segment.
+    const BOUNDARY_SLOP = 0.05;
+    for (let i = 0; i < firstSegment.words.length; i++) {
+      const w = firstSegment.words[i]!;
+      expect(w.end).toBeGreaterThanOrEqual(w.start);
+      if (i > 0) {
+        expect(w.start).toBeGreaterThanOrEqual(firstSegment.words[i - 1]!.start);
+      }
+    }
+    expect(firstSegment.words[0]!.start).toBeGreaterThanOrEqual(firstSegment.start - BOUNDARY_SLOP);
+    expect(firstSegment.words.at(-1)!.end).toBeLessThanOrEqual(firstSegment.end + BOUNDARY_SLOP);
+  });
+});
 
 describe.runIf(curatedFixtures.length > 0)("transcribe — curated WER checks", () => {
   beforeAll(() => {
@@ -96,7 +130,7 @@ describe.runIf(curatedFixtures.length > 0)("transcribe — curated WER checks", 
 });
 
 describe.runIf(curatedFixtures.length === 0)("transcribe (no curated fixtures)", () => {
-  it.skip("no segments with _curated: true found in any fixture", () => {});
+  it.skip("no segments with _curated: true found in any fixture", () => { });
 });
 
 // Full pipeline eval: run transcribe+diarize+align over the whole meeting, then

@@ -13,32 +13,32 @@ const MODEL_URL =
 
 let _recognizer: OfflineRecognizer | null = null;
 
-export function getRecognizer(): OfflineRecognizer {
-  if (_recognizer) return _recognizer;
-  ensureModelFiles(MODEL_DIR);
+export function getRecognizer(modelDir: string = MODEL_DIR) {
+  const modelFiles = ensureModelFiles(modelDir);
+  if (_recognizer) return { recognizer: _recognizer, modelFiles };
   _recognizer = new sherpa_onnx.OfflineRecognizer({
     featConfig: { sampleRate: 16000, featureDim: 80 },
     modelConfig: {
       transducer: {
-        encoder: join(MODEL_DIR, "encoder.int8.onnx"),
-        decoder: join(MODEL_DIR, "decoder.int8.onnx"),
-        joiner: join(MODEL_DIR, "joiner.int8.onnx"),
+        encoder: modelFiles.encoder,
+        decoder: modelFiles.decoder,
+        joiner: modelFiles.joiner,
       },
-      tokens: join(MODEL_DIR, "tokens.txt"),
+      tokens: modelFiles.tokens,
       numThreads: 2,
       provider: "cpu",
       debug: 0,
       modelType: "nemo_transducer",
     },
   });
-  return _recognizer;
+  return { recognizer: _recognizer, modelFiles };
 }
 
 export function transcribeSamples(
   samples: Float32Array,
   sampleRate: number,
 ): OfflineRecognizerResult {
-  const recognizer = getRecognizer();
+  const { recognizer } = getRecognizer();
   const stream = recognizer.createStream();
   stream.acceptWaveform({ sampleRate, samples });
   recognizer.decode(stream);
@@ -81,8 +81,8 @@ export function tokensToWords(tokens: string[], timestamps: number[]): Transcrip
 // Parakeet TDT is a transducer model that processes audio as a single pass.
 // Very long files (~3 hrs) can hit memory limits or produce degraded output.
 // We split into fixed-size chunks and adjust timestamps by the chunk offset.
-// 30-minute chunks are well within the model's reliable range on typical hardware.
-export const CHUNK_SEC = 30 * 60;
+// 10-minute chunks are well within the model's reliable range on typical hardware.
+export const CHUNK_SEC = 10 * 60;
 
 export async function transcribeAudio(
   audioPath: string,
@@ -134,13 +134,21 @@ export async function transcribeAudio(
   return segments;
 }
 
-function ensureModelFiles(downloadDir: string) {
-  if (existsSync(downloadDir)) return;
+export function ensureModelFiles(downloadDir: string = MODEL_DIR) {
+  const paths = {
+    encoder: join(downloadDir, "encoder.int8.onnx"),
+    decoder: join(downloadDir, "decoder.int8.onnx"),
+    joiner: join(downloadDir, "joiner.int8.onnx"),
+    tokens: join(downloadDir, "tokens.txt"),
+    testWav: join(downloadDir, "test_wavs", "en.wav"),
+  }
+  if (existsSync(downloadDir)) return paths;
   console.log(`Downloading model files from ${MODEL_URL} to ${downloadDir}...`);
   mkdirSync(downloadDir, { recursive: true });
   execSync(`curl -L "${MODEL_URL}" | tar -xj -C "${dirname(downloadDir)}"`, {
     stdio: "inherit",
   });
+  return paths;
 }
 
 async function cli() {
