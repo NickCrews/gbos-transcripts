@@ -7,6 +7,10 @@ import sherpa_onnx, { type OfflineRecognizer, type OfflineRecognizerResult } fro
 import type { TranscriptSegment, TranscriptWord } from "./types.ts";
 
 const HERE = new URL(".", import.meta.url);
+// I chose this model based on how it is the highest accuracy with still a >3000x real-time facto
+// according to https://huggingface.co/spaces/hf-audio/open_asr_leaderboard
+// Keep your eye on that leaderboard. If there's a new model with better accuracy
+// that maintains that speed, we should switch to it.
 const MODEL_DIR = join(HERE.pathname, "models", "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8");
 const MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2";
