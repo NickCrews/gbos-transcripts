@@ -19,6 +19,28 @@ const MODEL_URL =
 // by the chunk offset.
 export const CHUNK_SEC = 2 * 60;
 
+export type TraceEvent = {
+  chunkIndex: number;
+  chunkStart: number;
+  chunkEnd: number;
+  wallStartMs: number;
+  wallEndMs: number;
+};
+
+const traceEvents: TraceEvent[] = [];
+
+function isTracingEnabled(): boolean {
+  return process.env.TRANSCRIBE_TRACE === "1";
+}
+
+export function getTraceEvents(): readonly TraceEvent[] {
+  return traceEvents;
+}
+
+export function resetTrace(): void {
+  traceEvents.length = 0;
+}
+
 export async function transcribeAudio(
   audio: string | sherpa_onnx.WaveForm,
   chunkSec: number = CHUNK_SEC,
@@ -27,14 +49,13 @@ export async function transcribeAudio(
   const wave = ensureWaveAudio(audio);
   const duration = wave.samples.length / wave.sampleRate;
   const nChunks = Math.max(1, Math.ceil(duration / chunkSec));
+  const tracing = isTracingEnabled();
 
   console.log(
-    `Transcribing ${audio} (${duration.toFixed(1)}s) in ${nChunks} chunk(s) of up to ${chunkSec}s...`,
+    `Transcribing ${typeof audio === "string" ? audio : "<waveform>"} (${duration.toFixed(1)}s) in ${nChunks} chunk(s) of up to ${chunkSec}s...`,
   );
 
-  const segments: TranscriptSegment[] = [];
-
-  for (let i = 0; i < nChunks; i++) {
+  const tasks = Array.from({ length: nChunks }, async (_, i): Promise<TranscriptSegment | null> => {
     const chunkStart = i * chunkSec;
     const chunkEnd = Math.min(chunkStart + chunkSec, duration);
     const startIdx = Math.round(chunkStart * wave.sampleRate);
@@ -45,9 +66,20 @@ export async function transcribeAudio(
       console.log(`  chunk ${i + 1}/${nChunks}: ${chunkStart.toFixed(0)}s – ${chunkEnd.toFixed(0)}s`);
     }
 
-    const result = transcribeSamples(chunk, wave.sampleRate);
+    const traceStart = tracing ? Date.now() : 0;
+    const result = await transcribeSamples(chunk, wave.sampleRate);
+    if (tracing) {
+      traceEvents.push({
+        chunkIndex: i,
+        chunkStart,
+        chunkEnd,
+        wallStartMs: traceStart,
+        wallEndMs: Date.now(),
+      });
+    }
+
     const text = result.text.trim();
-    if (!text) continue;
+    if (!text) return null;
 
     const words = tokensToWords(result.tokens ?? [], result.timestamps ?? []).map((w) => ({
       ...w,
@@ -55,13 +87,16 @@ export async function transcribeAudio(
       end: w.end + chunkStart,
     }));
 
-    segments.push({
+    return {
       text,
       start: words[0]?.start ?? chunkStart,
       end: words.at(-1)?.end ?? chunkEnd,
       words,
-    });
-  }
+    };
+  });
+
+  const results = await Promise.all(tasks);
+  const segments = results.filter((s): s is TranscriptSegment => s !== null);
 
   const elapsed = (Date.now() - wallStart) / 1000;
   console.log(`Done: ${duration.toFixed(1)}s audio in ${elapsed.toFixed(1)}s (RTF=${(elapsed / duration).toFixed(2)})`);
@@ -76,15 +111,14 @@ function ensureWaveAudio(audio: string | sherpa_onnx.WaveForm): sherpa_onnx.Wave
   return audio;
 }
 
-function transcribeSamples(
+async function transcribeSamples(
   samples: Float32Array,
   sampleRate: number,
-): OfflineRecognizerResult {
+): Promise<OfflineRecognizerResult> {
   const { recognizer } = getRecognizer();
   const stream = recognizer.createStream();
   stream.acceptWaveform({ sampleRate, samples });
-  recognizer.decode(stream);
-  return recognizer.getResult(stream);
+  return await recognizer.decodeAsync(stream);
 }
 
 let _recognizer: OfflineRecognizer | null = null;

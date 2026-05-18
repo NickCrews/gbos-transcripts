@@ -22,7 +22,6 @@ declare module 'sherpa-onnx-node' {
     export class OfflineRecognizer {
         constructor(config: unknown);
         createStream(): Stream;
-        decode(stream: Stream): void;
-        getResult(stream: Stream): OfflineRecognizerResult;
+        decodeAsync(stream: Stream): Promise<OfflineRecognizerResult>;
     }
 }
