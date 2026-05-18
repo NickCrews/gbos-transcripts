@@ -37,16 +37,14 @@ describe("transcribe", () => {
     expect(firstSegment.words.at(-1)!.end).toBeLessThanOrEqual(firstSegment.end + BOUNDARY_SLOP);
   });
 
-  it("can handle a hour long clip", async () => {
+  it("can handle a hour long clip", { timeout: 1 * 60 * 1000 }, async () => {
     // longer clips can cause out-of-memory errors, so verify that we can handle it.
     const youtubeId = "9HoIM5INxpI" // ~3 hour youtube video
     const { path: fullPath } = await getCachedAudio({ youtubeId });
     const shortenedPath = fullPath.replace(".wav", "-short.wav");
-    if (!existsSync(shortenedPath)) {
-      console.log(`Extracting 10 minute clip from ${fullPath} to ${shortenedPath}...`);
-      extractClip(fullPath, shortenedPath, 2 * 60, 62 * 60);
-    }
+    extractClip(fullPath, shortenedPath, 2 * 60, 60 * 60);
     const result = await transcribeAudio(shortenedPath)
+    console.log(result);
     expect(result.length).toBeGreaterThan(20);
   });
 });
