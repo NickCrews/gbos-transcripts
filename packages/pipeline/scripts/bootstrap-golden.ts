@@ -14,7 +14,7 @@ import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFileSync } from "node:fs";
 import { loadAllFixtures, type GoldenSegment } from "../src/test-utils/fixtures";
-import { getCachedAudioForFixture } from "../src/test-utils/audio-cache";
+import { getCachedAudio } from "../src/test-utils/audio-cache";
 import { transcribeAudio } from "../src/transcribe";
 import { diarizeAudio } from "../src/diarize";
 import { alignTranscriptWithSpeakers } from "../src/align";
@@ -41,7 +41,7 @@ async function main() {
   console.log(`Bootstrapping golden segments for ${target} (youtube: ${fixture.meeting.youtube_id})`);
 
   console.log("  Ensuring audio is cached...");
-  const cached = await getCachedAudioForFixture(fixture);
+  const cached = await getCachedAudio(fixture);
   console.log(`  Audio: ${cached.path}`);
 
   console.log("  Transcribing (full meeting — this may take a while)...");

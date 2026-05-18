@@ -11,73 +11,6 @@ const MODEL_DIR = join(HERE.pathname, "models", "sherpa-onnx-nemo-parakeet-tdt-0
 const MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2";
 
-let _recognizer: OfflineRecognizer | null = null;
-
-export function getRecognizer(modelDir: string = MODEL_DIR) {
-  const modelFiles = ensureModelFiles(modelDir);
-  if (_recognizer) return { recognizer: _recognizer, modelFiles };
-  _recognizer = new sherpa_onnx.OfflineRecognizer({
-    featConfig: { sampleRate: 16000, featureDim: 80 },
-    modelConfig: {
-      transducer: {
-        encoder: modelFiles.encoder,
-        decoder: modelFiles.decoder,
-        joiner: modelFiles.joiner,
-      },
-      tokens: modelFiles.tokens,
-      numThreads: 2,
-      provider: "cpu",
-      debug: 0,
-      modelType: "nemo_transducer",
-    },
-  });
-  return { recognizer: _recognizer, modelFiles };
-}
-
-export function transcribeSamples(
-  samples: Float32Array,
-  sampleRate: number,
-): OfflineRecognizerResult {
-  const { recognizer } = getRecognizer();
-  const stream = recognizer.createStream();
-  stream.acceptWaveform({ sampleRate, samples });
-  recognizer.decode(stream);
-  return recognizer.getResult(stream);
-}
-
-// NeMo Parakeet uses space-prefixed tokens (e.g. " Ask", "sk") where a leading
-// space marks a word boundary. Punctuation tokens (e.g. ",") have no leading
-// space and attach to the preceding word.
-export function tokensToWords(tokens: string[], timestamps: number[]): TranscriptWord[] {
-  const words: TranscriptWord[] = [];
-  let currentText = "";
-  let currentStart = 0;
-
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i]!;
-    const ts = timestamps[i]!;
-    // Also accept ▁ (U+2581) for models that use SentencePiece word-start marker.
-    const isWordStart = token.startsWith(" ") || token.startsWith("▁") || i === 0;
-
-    if (isWordStart && currentText) {
-      words.push({ text: currentText, start: currentStart, end: ts });
-      currentText = token.replace(/^[ ▁]+/, "");
-      currentStart = ts;
-    } else if (isWordStart) {
-      currentText = token.replace(/^[ ▁]+/, "");
-      currentStart = ts;
-    } else {
-      currentText += token;
-    }
-  }
-
-  if (currentText) {
-    words.push({ text: currentText, start: currentStart, end: timestamps.at(-1) ?? currentStart });
-  }
-
-  return words.filter((w) => w.text.length > 0);
-}
-
 // Parakeet TDT is a transducer model that processes audio as a single pass.
 // Very long files (~3 hrs) can hit memory limits or produce degraded output.
 // We split into fixed-size chunks and adjust timestamps by the chunk offset.
@@ -85,16 +18,16 @@ export function tokensToWords(tokens: string[], timestamps: number[]): Transcrip
 export const CHUNK_SEC = 10 * 60;
 
 export async function transcribeAudio(
-  audioPath: string,
+  audio: string | sherpa_onnx.WaveForm,
   chunkSec: number = CHUNK_SEC,
 ): Promise<TranscriptSegment[]> {
   const wallStart = Date.now();
-  const wave = sherpa_onnx.readWave(audioPath);
+  const wave = ensureWaveAudio(audio);
   const duration = wave.samples.length / wave.sampleRate;
   const nChunks = Math.max(1, Math.ceil(duration / chunkSec));
 
   console.log(
-    `Transcribing ${audioPath} (${duration.toFixed(1)}s) in ${nChunks} chunk(s) of up to ${chunkSec}s...`,
+    `Transcribing ${audio} (${duration.toFixed(1)}s) in ${nChunks} chunk(s) of up to ${chunkSec}s...`,
   );
 
   const segments: TranscriptSegment[] = [];
@@ -134,6 +67,47 @@ export async function transcribeAudio(
   return segments;
 }
 
+function ensureWaveAudio(audio: string | sherpa_onnx.WaveForm): sherpa_onnx.WaveForm {
+  if (typeof audio === "string") {
+    return sherpa_onnx.readWave(audio);
+  }
+  return audio;
+}
+
+function transcribeSamples(
+  samples: Float32Array,
+  sampleRate: number,
+): OfflineRecognizerResult {
+  const { recognizer } = getRecognizer();
+  const stream = recognizer.createStream();
+  stream.acceptWaveform({ sampleRate, samples });
+  recognizer.decode(stream);
+  return recognizer.getResult(stream);
+}
+
+let _recognizer: OfflineRecognizer | null = null;
+
+export function getRecognizer(modelDir: string = MODEL_DIR) {
+  const modelFiles = ensureModelFiles(modelDir);
+  if (_recognizer) return { recognizer: _recognizer, modelFiles };
+  _recognizer = new sherpa_onnx.OfflineRecognizer({
+    featConfig: { sampleRate: 16000, featureDim: 80 },
+    modelConfig: {
+      transducer: {
+        encoder: modelFiles.encoder,
+        decoder: modelFiles.decoder,
+        joiner: modelFiles.joiner,
+      },
+      tokens: modelFiles.tokens,
+      numThreads: 2,
+      provider: "cpu",
+      debug: 0,
+      modelType: "nemo_transducer",
+    },
+  });
+  return { recognizer: _recognizer, modelFiles };
+}
+
 export function ensureModelFiles(downloadDir: string = MODEL_DIR) {
   const paths = {
     encoder: join(downloadDir, "encoder.int8.onnx"),
@@ -149,6 +123,39 @@ export function ensureModelFiles(downloadDir: string = MODEL_DIR) {
     stdio: "inherit",
   });
   return paths;
+}
+
+// NeMo Parakeet uses space-prefixed tokens (e.g. " Ask", "sk") where a leading
+// space marks a word boundary. Punctuation tokens (e.g. ",") have no leading
+// space and attach to the preceding word.
+function tokensToWords(tokens: string[], timestamps: number[]): TranscriptWord[] {
+  const words: TranscriptWord[] = [];
+  let currentText = "";
+  let currentStart = 0;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    const ts = timestamps[i]!;
+    // Also accept ▁ (U+2581) for models that use SentencePiece word-start marker.
+    const isWordStart = token.startsWith(" ") || token.startsWith("▁") || i === 0;
+
+    if (isWordStart && currentText) {
+      words.push({ text: currentText, start: currentStart, end: ts });
+      currentText = token.replace(/^[ ▁]+/, "");
+      currentStart = ts;
+    } else if (isWordStart) {
+      currentText = token.replace(/^[ ▁]+/, "");
+      currentStart = ts;
+    } else {
+      currentText += token;
+    }
+  }
+
+  if (currentText) {
+    words.push({ text: currentText, start: currentStart, end: timestamps.at(-1) ?? currentStart });
+  }
+
+  return words.filter((w) => w.text.length > 0);
 }
 
 async function cli() {

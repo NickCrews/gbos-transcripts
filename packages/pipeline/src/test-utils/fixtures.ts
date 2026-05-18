@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { type CachedAudio, getCachedAudio } from "./audio-cache";
 
 const FIXTURES_ROOT = new URL("../../test-fixtures/", import.meta.url).pathname;
 
@@ -50,6 +51,7 @@ export interface MeetingFixture {
   people: GoldenPerson[];
   meeting: GoldenMeeting;
   segments: GoldenSegment[];
+  getAudio(): Promise<CachedAudio>;
 }
 
 function parseJsonl<T>(path: string): T[] {
@@ -91,6 +93,7 @@ export function loadAllFixtures(): MeetingFixture[] {
         fixtureDir,
         municipality,
         people,
+        getAudio: async () => getCachedAudio({ youtubeId: meeting.youtube_id, sha256: meeting._audio_sha256 }),
         meeting,
         segments,
       });

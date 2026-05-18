@@ -4,7 +4,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import sherpa from "sherpa-onnx-node";
 import { downloadVideoAudio } from "@gbos/core/youtube";
-import type { MeetingFixture } from "./fixtures";
 
 const CACHE_ROOT = join(homedir(), ".cache", "gbos-transcripts", "meetings");
 
@@ -24,9 +23,8 @@ export function meetingCacheDir(youtube_id: string): string {
   return join(CACHE_ROOT, youtube_id);
 }
 
-export async function getCachedAudioForFixture(fixture: MeetingFixture): Promise<CachedAudio> {
-  const { youtube_id, _audio_sha256 } = fixture.meeting;
-  const dir = meetingCacheDir(youtube_id);
+export async function getCachedAudio(fixture: { youtubeId: string, sha256?: string }): Promise<CachedAudio> {
+  const dir = meetingCacheDir(fixture.youtubeId);
   const audioPath = join(dir, "audio.wav");
   const manifestPath = join(dir, "manifest.json");
   mkdirSync(dir, { recursive: true });
@@ -39,26 +37,26 @@ export async function getCachedAudioForFixture(fixture: MeetingFixture): Promise
         `Cached audio sha256 ${actual} does not match manifest ${manifest.sha256}; delete ${dir} to re-download.`,
       );
     }
-    if (manifest.sha256 !== _audio_sha256) {
+    if (fixture.sha256 && manifest.sha256 !== fixture.sha256) {
       throw new Error(
-        `Cached audio sha256 ${manifest.sha256} does not match golden _audio_sha256 ${_audio_sha256} for ${youtube_id}.`,
+        `Cached audio sha256 ${manifest.sha256} does not match golden _audio_sha256 ${fixture.sha256} for ${fixture.youtubeId}.`,
       );
     }
     return { path: audioPath, manifest };
   }
 
-  downloadVideoAudio(youtube_id, audioPath, "skip");
+  downloadVideoAudio(fixture.youtubeId, audioPath, "skip");
 
   const sha256 = await sha256File(audioPath);
-  if (sha256 !== _audio_sha256) {
+  if (fixture.sha256 && sha256 !== fixture.sha256) {
     throw new Error(
-      `Downloaded audio sha256 ${sha256} does not match golden _audio_sha256 ${_audio_sha256} for ${youtube_id}. Did the YouTube source change?`,
+      `Downloaded audio sha256 ${sha256} does not match golden _audio_sha256 ${fixture.sha256} for ${fixture.youtubeId}. Did the YouTube source change?`,
     );
   }
 
   const wave = sherpa.readWave(audioPath);
   const manifest: AudioManifest = {
-    youtube_id,
+    youtube_id: fixture.youtubeId,
     sha256,
     sample_rate: wave.sampleRate,
     duration_sec: wave.samples.length / wave.sampleRate,
