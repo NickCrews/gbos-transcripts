@@ -11,7 +11,7 @@ import {
   vector,
   index,
 } from "drizzle-orm/pg-core";
-import { N_DIMENSIONS as N_VOICE_EMBEDDING_DIMENSIONS } from "../voice_embeddings";
+import { N_DIMENSIONS } from "../voice_embeddings";
 
 const secondsInterval = () => interval({ fields: "second", precision: 3 });
 
@@ -67,9 +67,7 @@ export const peopleTable = pgTable(
     id: serial().primaryKey(),
     name: varchar().notNull().default(""),
     created_at: timestamp().notNull().defaultNow(),
-    voice_embedding: vector({
-      dimensions: N_VOICE_EMBEDDING_DIMENSIONS,
-    }).notNull(),
+    voice_embedding: vector({ dimensions: N_DIMENSIONS }).notNull(),
   },
   (table) => [
     index("idx_voice_embedding_l2").using(
@@ -78,9 +76,6 @@ export const peopleTable = pgTable(
     ),
   ],
 );
-
-// all-MiniLM-L6-v2 produces 384-dim text embeddings used for semantic search.
-const N_TEXT_EMBEDDING_DIMENSIONS = 384;
 
 export interface SegmentWord {
   text: string;
@@ -101,7 +96,7 @@ export const segmentsTable = pgTable("segments", {
     (): SQL => sql`${segmentsTable.end_secs} - ${segmentsTable.start_secs}`,
   ),
   words: jsonb().$type<SegmentWord[]>(),
-  text_embedding: vector({ dimensions: N_TEXT_EMBEDDING_DIMENSIONS }),
+  text_embedding: vector({ dimensions: N_DIMENSIONS }),
   created_at: timestamp().notNull().defaultNow(),
 });
 
