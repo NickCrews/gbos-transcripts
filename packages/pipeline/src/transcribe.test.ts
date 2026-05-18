@@ -1,7 +1,15 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ensureModelFiles, getTraceEvents, resetTrace, transcribeAudio } from "./transcribe";
 import { getCachedAudio } from "./test-utils/audio-cache";
+import { compareTranscripts } from "./test-utils/wer";
+import type { TranscriptSegment, TranscriptWord } from "./types";
 import { execSync } from "child_process";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const FIXTURES_DIR = join(HERE, "..", "test-fixtures");
 
 beforeAll(() => {
   process.env.TRANSCRIBE_TRACE = "1";
@@ -77,7 +85,92 @@ describe("transcribe", () => {
     const result = await transcribeAudio(shortenedPath)
     expect(result.length).toBeGreaterThan(20);
   });
+
+  // Verifies accuracy of the transcribe pipeline against a golden snapshot of
+  // word-level timestamps. Set UPDATE_TRANSCRIBE_GOLDEN=1 to regenerate the
+  // golden file (like vitest --update for inline snapshots).
+  it("matches the golden transcript for a 3-minute multi-speaker clip", { timeout: 10 * 60 * 1000 }, async () => {
+    const FIXTURE_DIR = join(FIXTURES_DIR, "three-minute-multi-speaker");
+    mkdirSync(FIXTURE_DIR, { recursive: true });
+    const youtubeId = "9HoIM5INxpI";
+    const startSec = 30 * 60; // skip preamble — start mid-meeting for multiple speakers
+    const durationSec = 3 * 60;
+    const goldenPath = join(FIXTURE_DIR, `golden.jsonl`);
+    const { path: fullPath } = await getCachedAudio({ youtubeId });
+    const clipPath = join(FIXTURE_DIR, `clip.gen.wav`);
+    extractClip(fullPath, clipPath, startSec, durationSec);
+
+    const segments = await transcribeAudio(clipPath);
+    writeTranscription(join(FIXTURE_DIR, `hypothesis.gen.jsonl`), segments);
+    const hypWords = flattenWords(segments);
+    expect(hypWords.length).toBeGreaterThan(100);
+
+    if (process.env.UPDATE_TRANSCRIBE_GOLDEN === "1") {
+      writeTranscription(goldenPath, segments);
+      return;
+    }
+
+    if (!existsSync(goldenPath)) {
+      throw new Error(
+        `Golden file missing: ${goldenPath}\nRun with UPDATE_TRANSCRIBE_GOLDEN=1 to bootstrap it.`,
+      );
+    }
+    const refWords = readTranscription(goldenPath);
+    expect(refWords.length).toBeGreaterThan(100);
+
+    // First: confirm the check actually has teeth. With strict thresholds the
+    // current transcribe output should never pass, so the assertion below MUST
+    // throw. If it doesn't, our metric is broken (or the model is suspiciously
+    // perfect — also worth knowing).
+    expect(() => assertWithinThresholds(refWords, hypWords, { maxWER: 0, maxTimestampError: 0 })).toThrow();
+
+    // Then the real check: lax-but-meaningful thresholds we expect to pass.
+    // WER < 15% and matched-word p95 timestamp error < 0.5s are realistic for
+    // this model on noisy multi-speaker audio.
+    assertWithinThresholds(refWords, hypWords, { maxWER: 0.15, maxTimestampError: 0.5 });
+  });
 });
+
+function flattenWords(segments: readonly TranscriptSegment[]): TranscriptWord[] {
+  return segments.flatMap((s) => s.words);
+}
+
+function readTranscription(path: string): TranscriptWord[] {
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .flatMap((line) => (JSON.parse(line) as { words: TranscriptWord[] }).words);
+}
+
+function writeTranscription(path: string, segments: TranscriptSegment[]) {
+  mkdirSync(dirname(path), { recursive: true });
+  const content =
+    segments.map((s) => JSON.stringify({ words: s.words })).join("\n") + "\n";
+  writeFileSync(path, content);
+  const nWords = flattenWords(segments).length;
+  console.log(`Wrote golden: ${path} (${nWords} words across ${segments.length} segment(s))`);
+}
+
+function assertWithinThresholds(
+  ref: readonly TranscriptWord[],
+  hyp: readonly TranscriptWord[],
+  thresholds: { maxWER: number; maxTimestampError: number },
+): void {
+  const cmp = compareTranscripts(ref, hyp);
+  const failures: string[] = [];
+  if (cmp.wer > thresholds.maxWER) {
+    failures.push(`WER ${cmp.wer.toFixed(4)} > ${thresholds.maxWER} (sub=${cmp.substitutions} del=${cmp.deletions} ins=${cmp.insertions} of ${cmp.refWordCount} ref words)`);
+  }
+  if (cmp.p95StartError > thresholds.maxTimestampError) {
+    failures.push(`p95 word-start error ${cmp.p95StartError.toFixed(3)}s > ${thresholds.maxTimestampError}s (mean=${cmp.meanStartError.toFixed(3)}s, max=${cmp.maxStartError.toFixed(3)}s, n=${cmp.matchedPairs})`);
+  }
+  if (cmp.p95EndError > thresholds.maxTimestampError) {
+    failures.push(`p95 word-end error ${cmp.p95EndError.toFixed(3)}s > ${thresholds.maxTimestampError}s (mean=${cmp.meanEndError.toFixed(3)}s, max=${cmp.maxEndError.toFixed(3)}s, n=${cmp.matchedPairs})`);
+  }
+  if (failures.length > 0) {
+    throw new Error(`Transcript outside thresholds:\n  - ${failures.join("\n  - ")}`);
+  }
+}
 
 
 function extractClip(inputPath: string, outputPath: string, startSec: number, durationSec: number): void {
