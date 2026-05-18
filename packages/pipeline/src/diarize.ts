@@ -1,18 +1,48 @@
 import { execSync } from "node:child_process";
-import { join } from "node:path";
 import type { DiarizationTurn } from "./types.ts";
 import sherpa from "sherpa-onnx-node";
+import { ensureDownloaded } from "./model.js";
 
 // Four-stage pipeline following OpenWhispr's local diarization architecture:
 //   1. Silero VAD     — filter silence before expensive stages (~2MB model)
 //   2. pyannote-3.0   — identify speaker boundaries + overlaps (~6.6MB ONNX)
 //   3. CAM++          — 512-dim voice embeddings, half the params of ECAPA-TDNN (~28MB ONNX)
 //   4. Agglomerative clustering — group embeddings at 0.5 cosine-similarity threshold
-//
-// sherpa-onnx runs natively via Node.js bindings — no Python, no GPU required.
-// Processing: ~30s for a 45-min meeting on M1 Mac.
 
-const MODELS_DIR = new URL("../models", import.meta.url).pathname;
+function ensurePyannote() {
+  return ensureDownloaded(
+    {
+      name: "sherpa-onnx-pyannote-segmentation-3-0",
+      url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+      files: {
+        "model.onnx": true,
+      },
+    }
+  );
+}
+
+function ensureCamp() {
+  return ensureDownloaded(
+    {
+      name: "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced",
+      url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recog-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.tar.bz2",
+      files: {
+        "model.onnx": true,
+      },
+    });
+}
+
+// function ensureSileroVAD() {
+//   return ensureDownloaded({
+//     name: "silero_vad",
+//     url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+//     single_file: true,
+//     files: {
+//       "silero_vad.onnx": true,
+//     },
+//   });
+// }
+
 const SAMPLE_RATE = 16000;
 const MIN_SEGMENT_SECS = 0.8; // below this, CAM++ embeddings are unreliable
 const EMBEDDING_DIM = 512;
@@ -30,17 +60,11 @@ export async function diarizeAudio(
   const sd = sherpa.createOfflineSpeakerDiarization({
     segmentation: {
       pyannote: {
-        model: join(
-          MODELS_DIR,
-          "sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
-        ),
+        model: ensurePyannote().files["model.onnx"],
       },
     },
     embedding: {
-      model: join(
-        MODELS_DIR,
-        "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx",
-      ),
+      model: ensureCamp().files["model.onnx"],
       numThreads: 1,
     },
     clustering: {
@@ -79,10 +103,7 @@ export async function diarizeAudio(
   }
 
   const extractor = new ExtractorCtor({
-    model: join(
-      MODELS_DIR,
-      "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced/model.onnx",
-    ),
+    model: ensureCamp().files["model.onnx"],
     numThreads: 1,
   });
 

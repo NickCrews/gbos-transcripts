@@ -23,31 +23,6 @@ export type ResolvedFiles<T extends DirListing> = {
   : never;
 };
 
-// const specs = [
-//   {
-//     name: "sherpa-onnx-pyannote-segmentation-3-0",
-//     url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
-//     files: {
-//       TODO
-//     },
-//   },
-//   {
-//     name: "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced",
-//     url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recog-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.tar.bz2",
-//     files: {
-//       TODO
-//       },
-//     },
-//     {
-//       name: "silero_vad",
-//       url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
-//       single_file: true,
-//       files: {
-//         "silero_vad.onnx": true,
-//       },
-//     },
-//   ] as const satisfies ModelSpec[];
-
 export function ensureDownloaded<S extends ModelSpec>(spec: S, rootDir: string = MODELS_DIR) {
   const path = join(rootDir, spec.name);
   let downloaded = false;
