@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { ensureModelFiles, transcribeAudio } from "./transcribe";
 import { getCachedAudio } from "./test-utils/audio-cache";
 import { execSync } from "child_process";
-import { existsSync } from "fs";
 
 describe("transcribe", () => {
   it("transcribes a 4 second audio sample", async () => {
